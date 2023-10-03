@@ -9,7 +9,7 @@ import xfacthd.framedblocks.api.block.IFramedBlock;
 import xfacthd.framedblocks.common.FBContent;
 import xfacthd.framedblocks.common.item.FramedToolItem;
 
-public class FramedCreativeTab extends CreativeModeTab
+public final class FramedCreativeTab extends CreativeModeTab
 {
     public FramedCreativeTab() { super("framed_blocks"); }
 
@@ -25,12 +25,16 @@ public class FramedCreativeTab extends CreativeModeTab
             Item itemOne = s1.getItem();
             Item itemTwo = s2.getItem();
 
+            if (itemOne == FBContent.itemFramedReinforcement.get()) { return 1; }
+            if (itemTwo == FBContent.itemFramedReinforcement.get()) { return -1; }
             if (itemOne instanceof FramedToolItem toolOne && itemTwo instanceof FramedToolItem toolTwo)
             {
                 return toolOne.getType().compareTo(toolTwo.getType());
             }
             else if (itemOne instanceof FramedToolItem) { return 1; }
             else if (itemTwo instanceof FramedToolItem) { return -1; }
+            if (itemOne == FBContent.blockFramingSaw.get().asItem()) { return 1; }
+            if (itemTwo == FBContent.blockFramingSaw.get().asItem()) { return -1; }
 
             Preconditions.checkArgument(
                     itemOne instanceof BlockItem bi && bi.getBlock() instanceof IFramedBlock,

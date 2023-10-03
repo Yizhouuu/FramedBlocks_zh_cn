@@ -7,29 +7,24 @@ import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.BlockAndTintGetter;
-import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.RegistryObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
-import xfacthd.framedblocks.api.util.FramedConstants;
 
 import java.util.*;
 import java.util.function.*;
 
-@Mod.EventBusSubscriber(modid = FramedConstants.MOD_ID, value = Dist.CLIENT)
 public final class ClientUtils
 {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -124,6 +119,33 @@ public final class ClientUtils
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
+    public static void reuseModels(
+            RegistryObject<Block> block, Map<ResourceLocation, BakedModel> models,
+            RegistryObject<Block> sourceBlock, @Nullable List<Property<?>> ignoredProps
+    )
+    {
+        for (BlockState state : block.get().getStateDefinition().getPossibleStates())
+        {
+            BlockState sourceState = sourceBlock.get().defaultBlockState();
+            for (Property prop : state.getProperties())
+            {
+                if (sourceState.hasProperty(prop))
+                {
+                    sourceState = sourceState.setValue(prop, state.getValue(prop));
+                }
+                else if (ignoredProps != null && !ignoredProps.contains(prop))
+                {
+                    LOGGER.warn("Found invalid ignored property {} for block {}!", prop, sourceState.getBlock());
+                }
+            }
+
+            ResourceLocation location = BlockModelShaper.stateToModelLocation(state);
+            ResourceLocation sourceLocation = BlockModelShaper.stateToModelLocation(sourceState);
+            models.put(location, models.get(sourceLocation));
+        }
+    }
+
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     private static BlockState ignoreProps(BlockState state, @Nullable List<Property<?>> ignoredProps)
     {
         if (ignoredProps == null || ignoredProps.isEmpty()) { return state; }
@@ -185,17 +207,29 @@ public final class ClientUtils
         tasks.add(new ClientTask(time, task));
     }
 
-    @SubscribeEvent
+    private static ResourceKey<Level> lastDimension = null;
+
     public static void onClientTick(TickEvent.ClientTickEvent event)
     {
         if (event.phase != TickEvent.Phase.END || tasks.isEmpty()) { return; }
+
+        Level level = Minecraft.getInstance().level;
+        if (level == null || level.dimension() != lastDimension)
+        {
+            lastDimension = level != null ? level.dimension() : null;
+            tasks.clear(); //Clear remaining tasks from the previous level
+
+            if (level == null)
+            {
+                return;
+            }
+        }
 
         Iterator<ClientTask> it = tasks.iterator();
         while (it.hasNext())
         {
             ClientTask task = it.next();
-            //noinspection ConstantConditions
-            if (Minecraft.getInstance().level.getGameTime() >= task.time)
+            if (level.getGameTime() >= task.time)
             {
                 task.task.run();
                 it.remove();

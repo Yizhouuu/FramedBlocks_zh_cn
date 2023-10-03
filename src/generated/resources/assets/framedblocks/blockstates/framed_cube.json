@@ -1,7 +1,28 @@
 {
-  "variants": {
-    "": {
-      "model": "framedblocks:block/framed_cube"
+  "multipart": [
+    {
+      "apply": {
+        "model": "framedblocks:block/framed_cube"
+      },
+      "when": {
+        "alt": "false"
+      }
+    },
+    {
+      "apply": {
+        "model": "framedblocks:block/framed_cube_alt"
+      },
+      "when": {
+        "alt": "true"
+      }
+    },
+    {
+      "apply": {
+        "model": "framedblocks:block/framed_reinforcement"
+      },
+      "when": {
+        "reinforced": "true"
+      }
     }
-  }
+  ]
 }

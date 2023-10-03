@@ -1,37 +1,45 @@
 package xfacthd.framedblocks;
 
 import com.mojang.logging.LogUtils;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.*;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.CrashReportCallables;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 import org.slf4j.Logger;
 import xfacthd.framedblocks.api.FramedBlocksAPI;
+import xfacthd.framedblocks.api.block.update.CullingUpdatePacket;
+import xfacthd.framedblocks.api.block.update.CullingUpdateTracker;
 import xfacthd.framedblocks.api.util.FramedConstants;
+import xfacthd.framedblocks.api.util.Utils;
 import xfacthd.framedblocks.client.util.ClientConfig;
 import xfacthd.framedblocks.common.FBContent;
+import xfacthd.framedblocks.common.block.AbstractFramedDoubleBlock;
 import xfacthd.framedblocks.common.compat.CompatHandler;
+import xfacthd.framedblocks.common.crafting.FramingSawRecipeCache;
 import xfacthd.framedblocks.common.data.BlueprintBehaviours;
-import xfacthd.framedblocks.common.net.OpenSignScreenPacket;
-import xfacthd.framedblocks.common.net.SignUpdatePacket;
+import xfacthd.framedblocks.common.data.camo.CamoFactories;
+import xfacthd.framedblocks.common.item.FramedBlueprintItem;
+import xfacthd.framedblocks.common.net.*;
 import xfacthd.framedblocks.common.util.*;
 
 @Mod(FramedConstants.MOD_ID)
-@Mod.EventBusSubscriber(modid = FramedConstants.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
+@SuppressWarnings("UtilityClassWithPublicConstructor")
 public final class FramedBlocks
 {
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    private static final String PROTOCOL_VERSION = "1";
+    private static final String PROTOCOL_VERSION = "2";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(FramedConstants.MOD_ID, "main"),
+            Utils.rl("main"),
             () -> PROTOCOL_VERSION,
             PROTOCOL_VERSION::equals,
             PROTOCOL_VERSION::equals
@@ -41,23 +49,32 @@ public final class FramedBlocks
 
     public FramedBlocks()
     {
-        FBContent.init();
+        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
+
+        FBContent.init(modBus);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CommonConfig.SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, ServerConfig.SPEC);
         FramedBlocksAPI.INSTANCE.accept(new ApiImpl());
+
+        modBus.addListener(FramedBlocks::onCommonSetup);
+        modBus.addListener(FramedBlocks::onLoadComplete);
+
+        IEventBus forgeBus = MinecraftForge.EVENT_BUS;
+        forgeBus.addListener(EventHandler::onBlockLeftClick);
+        forgeBus.addListener(CullingUpdateTracker::onServerLevelTick);
+        forgeBus.addListener(FramingSawRecipeCache::onAddReloadListener);
 
         CompatHandler.init();
 
         CrashReportCallables.registerCrashCallable("FramedBlocks BlockEntity Warning", FramedBlocks::getBlockEntityWarning);
     }
 
-    @SubscribeEvent
-    public static void setup(final FMLCommonSetupEvent event)
+    private static void onCommonSetup(final FMLCommonSetupEvent event)
     {
         CHANNEL.messageBuilder(SignUpdatePacket.class, 0, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(SignUpdatePacket::encode)
-                .decoder(SignUpdatePacket::new)
+                .decoder(SignUpdatePacket::decode)
                 .consumerNetworkThread(SignUpdatePacket::handle)
                 .add();
 
@@ -67,7 +84,27 @@ public final class FramedBlocks
                 .consumerNetworkThread(OpenSignScreenPacket::handle)
                 .add();
 
+        CHANNEL.messageBuilder(CullingUpdatePacket.class, 2, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(CullingUpdatePacket::encode)
+                .decoder(CullingUpdatePacket::decode)
+                .consumerNetworkThread(CullingUpdatePacket::handle)
+                .add();
+
+        CHANNEL.messageBuilder(SelectFramingSawRecipePacket.class, 3, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(SelectFramingSawRecipePacket::encode)
+                .decoder(SelectFramingSawRecipePacket::new)
+                .consumerMainThread(SelectFramingSawRecipePacket::handle)
+                .add();
+
         BlueprintBehaviours.register();
+        AbstractFramedDoubleBlock.cacheStatePairs();
+        CompatHandler.commonSetup();
+    }
+
+    private static void onLoadComplete(final FMLLoadCompleteEvent event)
+    {
+        CamoFactories.lock();
+        FramedBlueprintItem.lockRegistration();
     }
 
     private static String getBlockEntityWarning()

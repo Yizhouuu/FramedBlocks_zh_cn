@@ -6,8 +6,6 @@ import net.minecraft.data.loot.BlockLoot;
 import net.minecraft.data.loot.LootTableProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.DoorBlock;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.storage.loot.*;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.functions.SetItemCountFunction;
@@ -22,7 +20,7 @@ import java.util.*;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
-public class FramedLootTableProvider extends LootTableProvider
+public final class FramedLootTableProvider extends LootTableProvider
 {
     public FramedLootTableProvider(DataGenerator gen) { super(gen); }
 
@@ -52,31 +50,42 @@ public class FramedLootTableProvider extends LootTableProvider
         @Override
         protected void addTables()
         {
+            dropOther(FBContent.blockFramedWaterloggablePressurePlate.get(), FBContent.blockFramedPressurePlate.get());
+            dropOther(FBContent.blockFramedWaterloggableStonePressurePlate.get(), FBContent.blockFramedStonePressurePlate.get());
+            dropOther(FBContent.blockFramedWaterloggableObsidianPressurePlate.get(), FBContent.blockFramedObsidianPressurePlate.get());
+            dropOther(FBContent.blockFramedWaterloggableGoldPressurePlate.get(), FBContent.blockFramedGoldPressurePlate.get());
+            dropOther(FBContent.blockFramedWaterloggableIronPressurePlate.get(), FBContent.blockFramedIronPressurePlate.get());
+
+            dropDoor(FBContent.blockFramedDoor.get());
+            dropDoor(FBContent.blockFramedIronDoor.get());
+            dropTwoOf(FBContent.blockFramedDoubleSlab.get(), FBContent.blockFramedSlab.get());
+            dropTwoOf(FBContent.blockFramedDoublePanel.get(), FBContent.blockFramedPanel.get());
+
+            dropOther(FBContent.blockFramedVerticalHalfSlope.get(), FBContent.blockFramedHalfSlope.get());
+            dropOther(FBContent.blockFramedVerticalDoubleHalfSlope.get(), FBContent.blockFramedDoubleHalfSlope.get());
+
             FBContent.getRegisteredBlocks()
                     .stream()
                     .map(RegistryObject::get)
-                    .filter(block -> block != FBContent.blockFramedDoor.get() &&
-                            block != FBContent.blockFramedDoubleSlab.get() &&
-                            block != FBContent.blockFramedDoublePanel.get() &&
-                            block != FBContent.blockFramedIronDoor.get()
-                    )
+                    .filter(block -> !map.containsKey(block.getLootTable()))
                     .forEach(this::dropSelf);
-
-            add(FBContent.blockFramedDoor.get(), block -> createSinglePropConditionTable(block, DoorBlock.HALF, DoubleBlockHalf.LOWER));
-            add(FBContent.blockFramedDoubleSlab.get(), block -> droppingTwo(block, FBContent.blockFramedSlab.get()));
-            add(FBContent.blockFramedDoublePanel.get(), block -> droppingTwo(block, FBContent.blockFramedPanel.get()));
-            add(FBContent.blockFramedIronDoor.get(), block -> createSinglePropConditionTable(block, DoorBlock.HALF, DoubleBlockHalf.LOWER));
         }
 
-        protected static LootTable.Builder droppingTwo(Block block, Block drop) {
-            return LootTable.lootTable().withPool(
+        protected void dropTwoOf(Block block, Block drop)
+        {
+            add(block, b -> LootTable.lootTable().withPool(
                     LootPool.lootPool().setRolls(ConstantValue.exactly(1)).add(
                             applyExplosionDecay(block, LootItem.lootTableItem(drop).apply(
                                     SetItemCountFunction.setCount(ConstantValue.exactly(2))
                                     )
                             )
                     )
-            );
+            ));
+        }
+
+        protected void dropDoor(Block block)
+        {
+            add(block, BlockLoot::createDoorTable);
         }
     }
 }

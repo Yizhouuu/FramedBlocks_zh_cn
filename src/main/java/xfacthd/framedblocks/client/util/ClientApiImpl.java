@@ -5,17 +5,26 @@ import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraftforge.client.model.data.ModelData;
 import xfacthd.framedblocks.api.FramedBlocksClientAPI;
 import xfacthd.framedblocks.api.ghost.GhostRenderBehaviour;
 import xfacthd.framedblocks.api.type.IBlockType;
+import xfacthd.framedblocks.api.util.ConTexMode;
 import xfacthd.framedblocks.api.util.client.OutlineRender;
 import xfacthd.framedblocks.client.model.FluidModel;
 import xfacthd.framedblocks.client.render.BlockOutlineRenderer;
 import xfacthd.framedblocks.client.render.GhostBlockRenderer;
+import xfacthd.framedblocks.common.compat.create.CreateCompat;
+
+import java.util.function.Function;
 
 @SuppressWarnings("unused")
-public class ClientApiImpl implements FramedBlocksClientAPI
+public final class ClientApiImpl implements FramedBlocksClientAPI
 {
+    private static final CtContextSupplier[] CT_CONTEXT_GETTERS = new CtContextSupplier[] {
+            CreateCompat::tryGetCTContext
+    };
+
     @Override
     public BlockColor defaultBlockColor() { return FramedBlockColor.INSTANCE; }
 
@@ -39,4 +48,29 @@ public class ClientApiImpl implements FramedBlocksClientAPI
     {
         GhostBlockRenderer.registerBehaviour(behaviour, items);
     }
+
+    @Override
+    public boolean useDiscreteUVSteps() { return ClientConfig.useDiscreteUVSteps; }
+
+    @Override
+    public ConTexMode getConTexMode() { return ClientConfig.conTexMode; }
+
+    @Override
+    public Object extractCTContext(ModelData data)
+    {
+        for (CtContextSupplier sup : CT_CONTEXT_GETTERS)
+        {
+            Object ctx = sup.apply(data);
+            if (ctx != null)
+            {
+                return ctx;
+            }
+        }
+        return null;
+    }
+
+
+
+    @FunctionalInterface
+    private interface CtContextSupplier extends Function<ModelData, Object> { }
 }

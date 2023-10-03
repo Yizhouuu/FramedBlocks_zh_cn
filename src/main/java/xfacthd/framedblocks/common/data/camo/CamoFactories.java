@@ -2,19 +2,14 @@ package xfacthd.framedblocks.common.data.camo;
 
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fluids.capability.CapabilityFluidHandler;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLLoadCompleteEvent;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import xfacthd.framedblocks.api.data.CamoContainer;
-import xfacthd.framedblocks.api.util.FramedConstants;
 import xfacthd.framedblocks.common.FBContent;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@Mod.EventBusSubscriber(modid = FramedConstants.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
-public class CamoFactories
+public final class CamoFactories
 {
     private static final Map<Item, CamoContainer.Factory> itemToFactory = new HashMap<>();
     private static boolean locked = false;
@@ -40,13 +35,16 @@ public class CamoFactories
         {
             return itemToFactory.get(stack.getItem());
         }
-        if (stack.getCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY).isPresent())
+        if (stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM).isPresent())
         {
             return FBContent.factoryFluid.get();
         }
         return FBContent.factoryBlock.get();
     }
 
-    @SubscribeEvent
-    public static void onLoadComplete(final FMLLoadCompleteEvent event) { locked = true; }
+    public static void lock() { locked = true; }
+
+
+
+    private CamoFactories() { }
 }

@@ -9,10 +9,12 @@ import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.fluids.FluidStack;
 import net.minecraftforge.fluids.FluidType;
-import net.minecraftforge.fluids.capability.*;
+import net.minecraftforge.fluids.capability.IFluidHandler;
+import net.minecraftforge.fluids.capability.IFluidHandlerItem;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import xfacthd.framedblocks.api.data.*;
 import xfacthd.framedblocks.api.util.Utils;
@@ -47,20 +49,14 @@ public class FluidCamoContainer extends CamoContainer
             return ItemStack.EMPTY;
         }
 
-        LazyOptional<IFluidHandlerItem> cap = stack.getCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY);
+        LazyOptional<IFluidHandlerItem> cap = stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM);
         return cap.map(handler ->
         {
             FluidStack fluid = new FluidStack(fluidState.getType(), FluidType.BUCKET_VOLUME);
             if (handler.fill(fluid, IFluidHandler.FluidAction.SIMULATE) == FluidType.BUCKET_VOLUME)
             {
-                if (stack.getItem() == Items.BUCKET)
-                {
-                    return new ItemStack(fluid.getFluid().getBucket());
-                }
-                else
-                {
-                    return stack;
-                }
+                handler.fill(fluid, IFluidHandler.FluidAction.EXECUTE);
+                return handler.getContainer();
             }
             return ItemStack.EMPTY;
         }).orElse(ItemStack.EMPTY);
@@ -68,6 +64,18 @@ public class FluidCamoContainer extends CamoContainer
 
     @Override
     public Fluid getFluid() { return fluidState.getType(); }
+
+    @Override
+    public boolean canRotateCamo()
+    {
+        return false;
+    }
+
+    @Override
+    public boolean rotateCamo()
+    {
+        return false;
+    }
 
     @Override
     public SoundType getSoundType()
@@ -102,7 +110,7 @@ public class FluidCamoContainer extends CamoContainer
         @Override
         public CamoContainer fromItem(ItemStack stack)
         {
-            LazyOptional<IFluidHandlerItem> cap = stack.getCapability(CapabilityFluidHandler.FLUID_HANDLER_ITEM_CAPABILITY);
+            LazyOptional<IFluidHandlerItem> cap = stack.getCapability(ForgeCapabilities.FLUID_HANDLER_ITEM);
             return cap.map(handler ->
             {
                 FluidStack fluid = handler.getFluidInTank(0);

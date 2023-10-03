@@ -17,12 +17,13 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraftforge.client.ChunkRenderTypeSet;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.client.model.*;
 import net.minecraftforge.client.model.data.ModelData;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import xfacthd.framedblocks.api.util.FramedConstants;
+import xfacthd.framedblocks.api.util.Utils;
 import xfacthd.framedblocks.api.util.client.ModelCache;
 
 import java.util.*;
@@ -33,7 +34,7 @@ import java.util.function.Supplier;
 public final class FluidModel implements BakedModel
 {
     private static final ModelState SIMPLE_STATE = new SimpleModelState(Transformation.identity());
-    public static final ResourceLocation BARE_MODEL = new ResourceLocation(FramedConstants.MOD_ID, "fluid/bare");
+    public static final ResourceLocation BARE_MODEL = Utils.rl("fluid/bare");
     private static final Function<ResourceLocation, TextureAtlasSprite> SPRITE_GETTER = (loc ->
             Minecraft.getInstance().getTextureAtlas(TextureAtlas.LOCATION_BLOCKS).apply(loc)
     );
@@ -44,12 +45,14 @@ public final class FluidModel implements BakedModel
             IClientFluidTypeExtensions.of(Fluids.WATER).getFlowingTexture()
     );
     private final RenderType fluidLayer;
+    private final ChunkRenderTypeSet fluidLayerSet;
     private final Map<Direction, List<BakedQuad>> quads;
     private final TextureAtlasSprite particles;
 
     private FluidModel(RenderType fluidLayer, Map<Direction, List<BakedQuad>> quads, TextureAtlasSprite particles)
     {
         this.fluidLayer = fluidLayer;
+        this.fluidLayerSet = ChunkRenderTypeSet.of(fluidLayer);
         this.quads = quads;
         this.particles = particles;
     }
@@ -65,6 +68,12 @@ public final class FluidModel implements BakedModel
     {
         if (side == null || layer != fluidLayer) { return Collections.emptyList(); }
         return quads.get(side);
+    }
+
+    @Override
+    public ChunkRenderTypeSet getRenderTypes(@NotNull BlockState state, @NotNull RandomSource rand, @NotNull ModelData data)
+    {
+        return fluidLayerSet;
     }
 
     @Override
@@ -99,7 +108,7 @@ public final class FluidModel implements BakedModel
                 modelBakery,
                 matToSprite(props),
                 SIMPLE_STATE,
-                new ResourceLocation(FramedConstants.MOD_ID, "fluid/" + fluid.getFluidType().toString().replace(":", "_"))
+                Utils.rl("fluid/" + fluid.getFluidType().toString().replace(":", "_"))
         );
         Preconditions.checkNotNull(model, "Failed to bake fluid model");
 

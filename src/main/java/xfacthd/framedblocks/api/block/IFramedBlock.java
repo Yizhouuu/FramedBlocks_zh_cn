@@ -1,6 +1,5 @@
 package xfacthd.framedblocks.api.block;
 
-import com.google.common.base.Preconditions;
 import com.mojang.datafixers.util.Pair;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -16,6 +15,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.*;
@@ -24,27 +24,30 @@ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.*;
+import net.minecraftforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.ModelDataManager;
+import net.minecraftforge.common.IPlantable;
+import net.minecraftforge.common.Tags;
+import net.minecraftforge.common.extensions.IForgeBlock;
+import net.minecraftforge.fml.loading.FMLEnvironment;
 import xfacthd.framedblocks.api.FramedBlocksAPI;
+import xfacthd.framedblocks.api.FramedBlocksClientAPI;
+import xfacthd.framedblocks.api.block.update.CullingUpdateTracker;
 import xfacthd.framedblocks.api.data.CamoContainer;
 import xfacthd.framedblocks.api.type.IBlockType;
 import xfacthd.framedblocks.api.util.*;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/**
- * The {@code team.chisel.ctm.api.IFacade} interface is not implemented directly and is instead hacked on
- * via a mixin to allow CTM to be an optional dependency :/
- */
 @SuppressWarnings({ "deprecation", "unused" })
-public interface IFramedBlock extends EntityBlock//, IFacade
+public interface IFramedBlock extends EntityBlock, IForgeBlock
 {
-    String LOCK_MESSAGE = "msg." + FramedConstants.MOD_ID + ".lock_state";
-    Component STATE_LOCKED = Utils.translate("msg", ".lock_state.locked").withStyle(ChatFormatting.RED);
-    Component STATE_UNLOCKED = Utils.translate("msg", ".lock_state.unlocked").withStyle(ChatFormatting.GREEN);
+    String LOCK_MESSAGE = Utils.translationKey("msg", "lock_state");
+    Component STATE_LOCKED = Utils.translate("msg", "lock_state.locked").withStyle(ChatFormatting.RED);
+    Component STATE_UNLOCKED = Utils.translate("msg", "lock_state.unlocked").withStyle(ChatFormatting.GREEN);
 
     IBlockType getBlockType();
 
@@ -74,6 +77,11 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return ((IFramedBlock) state.getBlock()).isSuffocating(state, level, pos);
     }
 
+    /**
+     * @deprecated Use {@link IFramedBlock#createBlockItem()} instead
+     */
+    @Deprecated(forRemoval = true, since = "1.19.3")
+    @SuppressWarnings("DeprecatedIsStillUsed")
     default Pair<IFramedBlock, BlockItem> createItemBlock()
     {
         return Pair.of(
@@ -83,6 +91,11 @@ public interface IFramedBlock extends EntityBlock//, IFacade
                         new Item.Properties().tab(FramedBlocksAPI.getInstance().defaultCreativeTab())
                 )
         );
+    }
+
+    default BlockItem createBlockItem()
+    {
+        return createItemBlock().getSecond();
     }
 
     default void tryApplyCamoImmediately(Level level, BlockPos pos, @Nullable LivingEntity placer, ItemStack stack)
@@ -104,7 +117,7 @@ public interface IFramedBlock extends EntityBlock//, IFacade
             if (player.getMainHandItem() != stack) { return; }
 
             ItemStack otherStack = player.getOffhandItem();
-            if (otherStack.getItem() instanceof BlockItem item && !(item.getBlock() instanceof IFramedBlock))
+            if ((otherStack.getItem() instanceof BlockItem item && !(item.getBlock() instanceof IFramedBlock)) || otherStack.is(Tags.Items.DUSTS_GLOWSTONE))
             {
                 if (level.getBlockEntity(pos) instanceof FramedBlockEntity be && !FramedBlocksAPI.getInstance().isFramedDoubleBlockEntity(be))
                 {
@@ -124,7 +137,7 @@ public interface IFramedBlock extends EntityBlock//, IFacade
 
         if (player.getItemInHand(hand).is(Utils.WRENCH))
         {
-            Rotation rot = player.isCrouching() ? Rotation.COUNTERCLOCKWISE_90 : Rotation.CLOCKWISE_90;
+            Rotation rot = player.isShiftKeyDown() ? Rotation.COUNTERCLOCKWISE_90 : Rotation.CLOCKWISE_90;
             BlockState newState = rotate(state, hit, rot);
             if (newState != state)
             {
@@ -145,6 +158,31 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return InteractionResult.FAIL;
     }
 
+    @Override
+    default int getLightEmission(BlockState state, BlockGetter level, BlockPos pos)
+    {
+        return getLight(state, level, pos);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getLightEmission(BlockState, BlockGetter, BlockPos)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
+    default int getLight(BlockState state, BlockGetter level, BlockPos pos)
+    {
+        if (getBlockType().canOccludeWithSolidCamo() && !state.getValue(FramedProperties.GLOWING))
+        {
+            return 0;
+        }
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            return be.getLightValue();
+        }
+        return 0;
+    }
+
+    @Deprecated(forRemoval = true, since = "1.19.2")
     default int getLight(BlockGetter level, BlockPos pos)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -154,6 +192,17 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return 0;
     }
 
+    @Override
+    default SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, @org.jetbrains.annotations.Nullable Entity entity)
+    {
+        return getCamoSound(state, level, pos);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getSoundType(BlockState, LevelReader, BlockPos, Entity)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default SoundType getCamoSound(BlockState state, LevelReader level, BlockPos pos)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -171,7 +220,7 @@ public interface IFramedBlock extends EntityBlock//, IFacade
     {
         if (builder.getOptionalParameter(LootContextParams.BLOCK_ENTITY) instanceof FramedBlockEntity be)
         {
-            be.addCamoDrops(drops);
+            be.addAdditionalDrops(drops, FramedBlocksAPI.getInstance().shouldConsumeCamo());
         }
 
         return drops;
@@ -179,33 +228,76 @@ public interface IFramedBlock extends EntityBlock//, IFacade
 
     default CtmPredicate getCtmPredicate() { return getBlockType().getCtmPredicate(); }
 
-    /**
-     * This method is overriden from {@code team.chisel.ctm.api.IFacade}. To allow CTM to be an optional dependency,
-     * the interface is not implemented directly and is instead hacked on via a mixin :/
-     */
-    @Nonnull
-    //@Override
-    @SuppressWarnings("unused")
-    default BlockState getFacade(@Nonnull BlockGetter level, @Nonnull BlockPos pos, @Nullable Direction side)
+    @Override
+    default BlockState getAppearance(BlockState state, BlockAndTintGetter level, BlockPos pos, Direction side, @Nullable BlockState queryState, @Nullable BlockPos queryPos)
     {
-        return Blocks.AIR.defaultBlockState();
+        BlockState air = Blocks.AIR.defaultBlockState();
+        if (!FMLEnvironment.dist.isClient()) { return air; }
+
+        ConTexMode mode = FramedBlocksClientAPI.getInstance().getConTexMode();
+        if (mode == ConTexMode.NONE) { return air; }
+
+        CtmPredicate pred = getCtmPredicate();
+        if (mode.atleast(ConTexMode.FULL_FACE) && pred.test(state, side))
+        {
+            return getCamo(level, pos, side, air);
+        }
+
+        if (mode.atleast(ConTexMode.FULL_CON_FACE) && queryPos != null)
+        {
+            Direction conFace = Direction.fromNormal(queryPos.subtract(pos));
+            if (pred.test(state, conFace))
+            {
+                //TODO: this successfully prevents a full block's side from connecting to a horizontally neighboring
+                //      slab but not the other way round
+                return getCamo(level, pos, conFace, air);
+            }
+        }
+
+        if (mode == ConTexMode.DETAILED && queryPos != null && !queryPos.equals(pos))
+        {
+            // Can't use query state directly as the query state may be the camo of the framed block actually in that position
+            if (level.getBlockState(queryPos).getBlock() instanceof IFramedBlock block)
+            {
+                Direction conFace = Direction.fromNormal(queryPos.subtract(pos));
+                if (conFace != null && isSideHiddenInModelData(level, pos, block, conFace))
+                {
+                    //TODO: improve camo retrieval on interactions with double blocks (i.e. slab next to double slab)
+                    return getCamo(level, pos, conFace, air);
+                }
+            }
+        }
+        return air;
     }
 
-    /**
-     * This method is overriden from {@code team.chisel.ctm.api.IFacade}. To allow CTM to be an optional dependency,
-     * the interface is not implemented directly and is instead hacked on via a mixin :/
-     */
-    @Nonnull
-    //@Override
-    @SuppressWarnings("unused")
-    default BlockState getFacade(@Nonnull BlockGetter level, @Nonnull BlockPos pos, @Nullable Direction side, @Nonnull BlockPos connection)
+    @SuppressWarnings("UnstableApiUsage")
+    private static boolean isSideHiddenInModelData(BlockAndTintGetter level, BlockPos pos, IFramedBlock block, Direction side)
     {
-        BlockState state = level.getBlockState(pos);
-        if (getCtmPredicate().test(state, side) && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        ModelDataManager manager = level.getModelDataManager();
+        if (manager == null) { return false; }
+
+        ModelData data = manager.getAt(pos);
+        if (data == null) { return false; }
+
+        if (block.getBlockType().isDoubleBlock())
         {
-            return be.getCamo().getState();
+            //TODO: this can't handle double blocks
+            return false;
         }
-        return Blocks.AIR.defaultBlockState();
+        else
+        {
+            FramedBlockData fbData = data.get(FramedBlockData.PROPERTY);
+            return fbData != null && fbData.isSideHidden(side);
+        }
+    }
+
+    private static BlockState getCamo(BlockAndTintGetter level, BlockPos pos, Direction side, BlockState air)
+    {
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            return be.getCamo(side).getState();
+        }
+        return air;
     }
 
     default boolean isSideHidden(BlockGetter level, BlockPos pos, BlockState state, Direction side)
@@ -215,21 +307,46 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         BlockPos neighborPos = pos.relative(side);
         BlockState neighborState = level.getBlockState(neighborPos);
 
-        if (FramedBlocksAPI.getInstance().enableIntangibility() && !isIntangible(state, level, pos, null))
+        if (neighborState.getBlock() instanceof IFramedBlock block && block.shouldPreventNeighborCulling(level, neighborPos, neighborState, pos, state))
         {
-            if (neighborState.getBlock() instanceof IFramedBlock block && block.getBlockType().allowMakingIntangible())
-            {
-                if (block.isIntangible(neighborState, level, neighborPos, null))
-                {
-                    return false;
-                }
-            }
+            return false;
+        }
+
+        //Let the game handle culling against solid surfaces automatically
+        if (neighborState.isSolidRender(level, neighborPos))
+        {
+            return false;
         }
 
         SideSkipPredicate pred = FramedBlocksAPI.getInstance().detailedCullingEnabled() ? getBlockType().getSideSkipPredicate() : SideSkipPredicate.CTM;
         return pred.test(level, pos, state, neighborState, side);
     }
 
+    default boolean shouldPreventNeighborCulling(BlockGetter level, BlockPos pos, BlockState state, BlockPos adjPos, BlockState adjState)
+    {
+        if (!FramedBlocksAPI.getInstance().enableIntangibility() || isIntangible(adjState, level, adjPos, null))
+        {
+            return false;
+        }
+
+        if (getBlockType().allowMakingIntangible())
+        {
+            return isIntangible(state, level, pos, null);
+        }
+        return false;
+    }
+
+    @Override
+    default float getFriction(BlockState state, LevelReader level, BlockPos pos, @org.jetbrains.annotations.Nullable Entity entity)
+    {
+        return getCamoSlipperiness(state, level, pos, entity);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getFriction(BlockState, LevelReader, BlockPos, Entity)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default float getCamoSlipperiness(BlockState state, LevelReader level, BlockPos pos, @Nullable Entity entity)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -243,6 +360,17 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return state.getBlock().getFriction();
     }
 
+    @Override
+    default float getExplosionResistance(BlockState state, BlockGetter level, BlockPos pos, Explosion explosion)
+    {
+        return getCamoExplosionResistance(state, level, pos, explosion);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getExplosionResistance(BlockState, BlockGetter, BlockPos, Explosion)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default float getCamoExplosionResistance(BlockState state, BlockGetter level, BlockPos pos, Explosion explosion)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -256,6 +384,17 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return state.getBlock().getExplosionResistance();
     }
 
+    @Override
+    default boolean isFlammable(BlockState state, BlockGetter level, BlockPos pos, Direction face)
+    {
+        return isCamoFlammable(level, pos, face);
+    }
+
+    /**
+     * Use {@link IForgeBlock#isFlammable(BlockState, BlockGetter, BlockPos, Direction)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default boolean isCamoFlammable(BlockGetter level, BlockPos pos, Direction face)
     {
         if (FramedBlocksAPI.getInstance().areBlocksFireproof()) { return false; }
@@ -267,6 +406,17 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return true;
     }
 
+    @Override
+    default int getFlammability(BlockState state, BlockGetter level, BlockPos pos, Direction face)
+    {
+        return getCamoFlammability(level, pos, face);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getFlammability(BlockState, BlockGetter, BlockPos, Direction)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default int getCamoFlammability(BlockGetter level, BlockPos pos, Direction face)
     {
         if (FramedBlocksAPI.getInstance().areBlocksFireproof()) { return 0; }
@@ -280,6 +430,22 @@ public interface IFramedBlock extends EntityBlock//, IFacade
             }
         }
         return 20;
+    }
+
+    @Override
+    default int getFireSpreadSpeed(BlockState state, BlockGetter level, BlockPos pos, Direction face)
+    {
+        if (FramedBlocksAPI.getInstance().areBlocksFireproof()) { return 0; }
+
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            int spreadSpeed = be.getCamoFireSpreadSpeed(face);
+            if (spreadSpeed > -1)
+            {
+                return spreadSpeed;
+            }
+        }
+        return 5;
     }
 
     default boolean handleBlockLeftClick(BlockState state, Level level, BlockPos pos, Player player) { return false; }
@@ -331,11 +497,26 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return state.getCollisionShape(level, pos, ctx);
     }
 
+    @Override
+    default boolean hidesNeighborFace(BlockGetter level, BlockPos pos, BlockState state, BlockState neighborState, Direction dir)
+    {
+        return doesHideNeighborFace(level, pos, state, neighborState, dir);
+    }
+
+    /**
+     * Use {@link IForgeBlock#hidesNeighborFace(BlockGetter, BlockPos, BlockState, BlockState, Direction)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default boolean doesHideNeighborFace(BlockGetter level, BlockPos pos, BlockState state, BlockState neighborState, Direction dir)
     {
         if (!FramedBlocksAPI.getInstance().canHideNeighborFaceInLevel(level)) { return false; }
         if (neighborState.getBlock() instanceof IFramedBlock) { return false; }
 
+        if (shouldPreventNeighborCulling(level, pos, state, pos.relative(dir), neighborState))
+        {
+            return false;
+        }
         if (level.getExistingBlockEntity(pos) instanceof FramedBlockEntity be)
         {
             if (neighborState.getBlock() instanceof HalfTransparentBlock && SideSkipPredicate.CTM.test(level, pos, state, neighborState, dir))
@@ -347,36 +528,47 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return false;
     }
 
+    @Override
+    default void onBlockStateChange(LevelReader level, BlockPos pos, BlockState oldState, BlockState newState)
+    {
+        onStateChange(level, pos, oldState, newState);
+    }
+
+    /**
+     * Use {@link IForgeBlock#onBlockStateChange(LevelReader, BlockPos, BlockState, BlockState)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default void onStateChange(LevelReader level, BlockPos pos, BlockState oldState, BlockState newState)
     {
         if (level.isClientSide() && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
         {
+            be.setBlockState(newState);
             onStateChangeClient(level, pos, oldState, newState, be);
         }
     }
 
+    @Deprecated(forRemoval = true)
     default void onStateChangeClient(LevelReader level, BlockPos pos, BlockState oldState, BlockState newState, FramedBlockEntity be)
     {
-        be.setBlockState(newState);
-        if (needCullingUpdateAfterStateChange(level, oldState, newState))
-        {
-            be.updateCulling(true, false);
-        }
+        // NOOP
     }
 
+    @Deprecated(forRemoval = true)
     default void updateCulling(LevelAccessor level, BlockPos pos, @Nullable BlockState neighborState, @Nullable Direction side, boolean rerender)
     {
-        Preconditions.checkArgument(side == null || neighborState != null, "Neighbor BlockState cannot be null when a side is provided");
-        if (level.isClientSide() && (side == null || !(neighborState.getBlock() instanceof IFramedBlock)) && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        updateCulling(level, pos);
+    }
+
+    default void updateCulling(LevelReader level, BlockPos pos)
+    {
+        if (!level.isClientSide() && level instanceof Level realLevel)
         {
-            if (side != null)
-            {
-                be.updateCulling(side, rerender);
-            }
-            else
-            {
-                be.updateCulling(true, rerender);
-            }
+            CullingUpdateTracker.enqueueCullingUpdate(realLevel, pos);
+        }
+        else if (level.isClientSide() && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            be.updateCulling(true, false);
         }
     }
 
@@ -438,6 +630,17 @@ public interface IFramedBlock extends EntityBlock//, IFacade
 
     default BlockState rotate(BlockState state, Direction face, Rotation rot) { return state.rotate(rot); }
 
+    @Override
+    default MaterialColor getMapColor(BlockState state, BlockGetter level, BlockPos pos, MaterialColor defaultColor)
+    {
+        return getCamoMapColor(level, pos, defaultColor);
+    }
+
+    /**
+     * Use {@link IForgeBlock#getMapColor(BlockState, BlockGetter, BlockPos, MaterialColor)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default MaterialColor getCamoMapColor(BlockGetter level, BlockPos pos, MaterialColor defaultColor)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -451,6 +654,26 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return defaultColor;
     }
 
+    @Override
+    default float[] getBeaconColorMultiplier(BlockState state, LevelReader level, BlockPos pos, BlockPos beaconPos)
+    {
+        if (!doesBlockOccludeBeaconBeam(state, level, pos))
+        {
+            return null;
+        }
+        return getCamoBeaconColorMultiplier(level, pos, beaconPos);
+    }
+
+    default boolean doesBlockOccludeBeaconBeam(BlockState state, LevelReader level, BlockPos pos)
+    {
+        return false;
+    }
+
+    /**
+     * Use {@link IForgeBlock#getBeaconColorMultiplier(BlockState, LevelReader, BlockPos, BlockPos)} instead
+     */
+    @SuppressWarnings("DeprecatedIsStillUsed")
+    @Deprecated(forRemoval = true)
     default float[] getCamoBeaconColorMultiplier(LevelReader level, BlockPos pos, BlockPos beaconPos)
     {
         if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
@@ -460,11 +683,70 @@ public interface IFramedBlock extends EntityBlock//, IFacade
         return null;
     }
 
+    // Can't be replaced with an override for the IForgeBlock method due to that being overridden in a Block patch
+    default boolean canCamoSustainPlant(BlockState state, BlockGetter level, BlockPos pos, Direction side, IPlantable plant)
+    {
+        if (state.isFaceSturdy(level, pos, side, SupportType.FULL) && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            if (!be.isSolidSide(side))
+            {
+                return false;
+            }
+
+            BlockState camoState = be.getCamo(side).getState();
+            return camoState.is(Utils.CAMO_SUSTAIN_PLANT) && camoState.canSustainPlant(level, pos, side, plant);
+        }
+        return false;
+    }
+
+    @Override
+    default boolean shouldDisplayFluidOverlay(BlockState state, BlockAndTintGetter level, BlockPos pos, FluidState fluid)
+    {
+        if (!getBlockType().canOccludeWithSolidCamo())
+        {
+            return false;
+        }
+        if (!state.getValue(FramedProperties.SOLID) && level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            return be.shouldCamoDisplayFluidOverlay(level, pos, fluid);
+        }
+        return false;
+    }
+
+    @Override
+    default boolean canEntityDestroy(BlockState state, BlockGetter level, BlockPos pos, Entity entity)
+    {
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            if (be.doesCamoPreventDestructionByEntity(entity))
+            {
+                return false;
+            }
+        }
+        return IForgeBlock.super.canEntityDestroy(state, level, pos, entity);
+    }
+
+    @Override
+    default BlockEntity newBlockEntity(BlockPos pos, BlockState state)
+    {
+        return new FramedBlockEntity(pos, state);
+    }
+
     default Optional<MutableComponent> printCamoBlock(CompoundTag beTag)
     {
         BlockState camoState = CamoContainer.load(beTag.getCompound("camo")).getState();
 
         if (camoState.isAir()) { return Optional.empty(); }
         return Optional.of(camoState.getBlock().getName().withStyle(ChatFormatting.WHITE));
+    }
+
+    static boolean toggleYSlope(BlockState state, Level level, BlockPos pos, Player player)
+    {
+        if (player.getMainHandItem().getItem() == Utils.FRAMED_WRENCH.get())
+        {
+            level.setBlockAndUpdate(pos, state.setValue(FramedProperties.Y_SLOPE, !state.getValue(FramedProperties.Y_SLOPE)));
+            return true;
+        }
+        return false;
     }
 }

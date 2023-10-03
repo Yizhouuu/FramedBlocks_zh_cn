@@ -6,24 +6,26 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.*;
-import net.minecraft.world.level.block.*;
-import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.SimpleWaterloggedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.material.*;
 import net.minecraft.world.level.storage.loot.LootContext;
-import net.minecraft.world.phys.*;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.*;
 import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
+import net.minecraftforge.common.IPlantable;
 import xfacthd.framedblocks.FramedBlocks;
 import xfacthd.framedblocks.api.type.IBlockType;
 import xfacthd.framedblocks.api.util.FramedProperties;
+import xfacthd.framedblocks.api.util.Utils;
 import xfacthd.framedblocks.api.util.client.FramedBlockRenderProperties;
 
 import javax.annotation.Nullable;
@@ -74,7 +76,7 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
     @Override
     public BlockState updateShape(BlockState state, Direction facing, BlockState facingState, LevelAccessor level, BlockPos pos, BlockPos facingPos)
     {
-        updateCulling(level, pos, facingState, facing, false);
+        updateCulling(level, pos);
         if (isWaterLoggable() && state.getValue(BlockStateProperties.WATERLOGGED))
         {
             level.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
@@ -84,18 +86,9 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
     }
 
     @Override
-    public void onBlockStateChange(LevelReader level, BlockPos pos, BlockState oldState, BlockState newState)
+    public void neighborChanged(BlockState state, Level level, BlockPos pos, Block block, BlockPos fromPos, boolean isMoving)
     {
-        onStateChange(level, pos, oldState, newState);
-    }
-
-    @Override
-    public int getLightEmission(BlockState state, BlockGetter level, BlockPos pos) { return getLight(level, pos); }
-
-    @Override
-    public SoundType getSoundType(BlockState state, LevelReader level, BlockPos pos, Entity entity)
-    {
-        return getCamoSound(state, level, pos);
+        updateCulling(level, pos);
     }
 
     @Override
@@ -124,33 +117,6 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
     }
 
     @Override
-    public float getFriction(BlockState state, LevelReader level, BlockPos pos, @Nullable Entity entity)
-    {
-        return getCamoSlipperiness(state, level, pos, entity);
-    }
-
-    @Override
-    public float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) { return 1F; }
-
-    @Override
-    public float getExplosionResistance(BlockState state, BlockGetter level, BlockPos pos, Explosion explosion)
-    {
-        return getCamoExplosionResistance(state, level, pos, explosion);
-    }
-
-    @Override
-    public boolean isFlammable(BlockState state, BlockGetter level, BlockPos pos, Direction face)
-    {
-        return isCamoFlammable(level, pos, face);
-    }
-
-    @Override
-    public int getFlammability(BlockState state, BlockGetter level, BlockPos pos, Direction face)
-    {
-        return getCamoFlammability(level, pos, face);
-    }
-
-    @Override
     public FluidState getFluidState(BlockState state)
     {
         if (isWaterLoggable() && state.getValue(BlockStateProperties.WATERLOGGED))
@@ -159,9 +125,6 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
         }
         return Fluids.EMPTY.defaultFluidState();
     }
-
-    @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new FramedBlockEntity(pos, state); }
 
     @Override
     public boolean canPlaceLiquid(BlockGetter level, BlockPos pos, BlockState state, Fluid fluid)
@@ -190,46 +153,25 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
         return getCamoDrops(super.getDrops(state, builder), builder);
     }
 
-    @Override
-    public boolean hidesNeighborFace(BlockGetter level, BlockPos pos, BlockState state, BlockState neighborState, Direction dir)
-    {
-        return doesHideNeighborFace(level, pos, state, neighborState, dir);
-    }
-
-    @Override
-    public MaterialColor getMapColor(BlockState state, BlockGetter level, BlockPos pos, MaterialColor defaultColor)
-    {
-        return getCamoMapColor(level, pos, defaultColor);
-    }
-
-    @Override
-    public float[] getBeaconColorMultiplier(BlockState state, LevelReader level, BlockPos pos, BlockPos beaconPos)
-    {
-        if (doesBlockOccludeBeaconBeam(state, level, pos))
-        {
-            return getCamoBeaconColorMultiplier(level, pos, beaconPos);
-        }
-        return null;
-    }
-
     /**
      * Return true if the given {@link BlockState} occludes the full area of the beacon beam and
      * can therefore tint the beam
      */
-    protected boolean doesBlockOccludeBeaconBeam(BlockState state, LevelReader level, BlockPos pos)
+    @Override
+    public boolean doesBlockOccludeBeaconBeam(BlockState state, LevelReader level, BlockPos pos)
     {
         if (beaconBeamOcclusion == null)
         {
             FramedBlocks.LOGGER.warn("Block '{}' handles shapes itself but doesn't override AbstractFramedBlock#doesBlockMaskBeaconBeam()", this);
             return false;
         }
-        //TODO: switch to precondition in 1.20
-        /*Preconditions.checkNotNull(
-                beamColorMasking,
-                "Block '%s' handles shapes itself but doesn't override AbstractFramedBlock#doesBlockMaskBeaconBeam()",
-                this
-        );*/
         return beaconBeamOcclusion.getBoolean(state);
+    }
+
+    @Override
+    public boolean canSustainPlant(BlockState state, BlockGetter level, BlockPos pos, Direction side, IPlantable plant)
+    {
+        return canCamoSustainPlant(state, level, pos, side, plant);
     }
 
     @Override
@@ -244,6 +186,23 @@ public abstract class AbstractFramedBlock extends Block implements IFramedBlock,
     }
 
 
+
+    protected static BlockState withCornerFacing(BlockState state, Direction side, Direction facing, Vec3 hitVec)
+    {
+        if (Utils.isY(side))
+        {
+            return state.setValue(FramedProperties.FACING_HOR, facing);
+        }
+
+        if (Utils.fractionInDir(hitVec, side.getCounterClockWise()) > .5)
+        {
+            return state.setValue(FramedProperties.FACING_HOR, side.getOpposite().getClockWise());
+        }
+        else
+        {
+            return state.setValue(FramedProperties.FACING_HOR, side.getOpposite());
+        }
+    }
 
     protected static BlockState withTop(BlockState state, Direction side, Vec3 hitVec)
     {

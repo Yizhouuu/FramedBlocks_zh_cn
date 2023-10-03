@@ -1,5 +1,6 @@
 package xfacthd.framedblocks.common.util;
 
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.item.*;
 import net.minecraft.world.level.BlockGetter;
@@ -15,12 +16,13 @@ import xfacthd.framedblocks.api.data.CamoContainer;
 import xfacthd.framedblocks.client.util.ClientConfig;
 import xfacthd.framedblocks.common.FBContent;
 import xfacthd.framedblocks.common.blockentity.FramedDoubleBlockEntity;
+import xfacthd.framedblocks.common.compat.flywheel.FlywheelCompat;
 import xfacthd.framedblocks.common.compat.nocubes.NoCubesCompat;
 import xfacthd.framedblocks.common.data.camo.CamoFactories;
 import xfacthd.framedblocks.common.item.FramedBlueprintItem;
 
 @SuppressWarnings("unused")
-public class ApiImpl implements FramedBlocksAPI
+public final class ApiImpl implements FramedBlocksAPI
 {
     @Override
     public BlockEntityType<FramedBlockEntity> defaultBlockEntity() { return FBContent.blockEntityTypeFramedBlock.get(); }
@@ -76,13 +78,33 @@ public class ApiImpl implements FramedBlocksAPI
     @Override
     public boolean canHideNeighborFaceInLevel(BlockGetter level)
     {
-        //TODO: activate when Flywheel is ported
-        return true;//!FlywheelCompat.isVirtualLevel(level);
+        return !FlywheelCompat.isVirtualLevel(level);
     }
 
     @Override
     public boolean canCullBlockNextTo(BlockState state, BlockState adjState)
     {
         return !state.is(BlockTags.LEAVES) && NoCubesCompat.mayCullNextTo(adjState);
+    }
+
+    @Override
+    public boolean shouldConsumeCamo()
+    {
+        return ServerConfig.consumeCamoItem;
+    }
+
+    @Override
+    public void updateCamoNbt(CompoundTag tag, String stateKey, String stackKey, String camoKey)
+    {
+        if (tag.contains(stateKey))
+        {
+            CompoundTag stateTag = tag.getCompound(stateKey);
+            tag.remove(stateKey);
+            tag.remove(stackKey);
+            CompoundTag camoTag = new CompoundTag();
+            camoTag.putString("type", FBContent.factoryBlock.getId().toString());
+            camoTag.put("state", stateTag);
+            tag.put(camoKey, camoTag);
+        }
     }
 }

@@ -6,12 +6,16 @@ import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.commons.lang3.tuple.Pair;
-import xfacthd.framedblocks.api.util.FramedConstants;
+import xfacthd.framedblocks.api.util.Utils;
 
-public class CommonConfig
+public final class CommonConfig
 {
     public static final ForgeConfigSpec SPEC;
     public static final CommonConfig INSTANCE;
+
+    private static final String KEY_FIREPROOF_BLOCKS = "fireproofBlocks";
+
+    public static final String TRANSLATION_FIREPROOF_BLOCKS = translate(KEY_FIREPROOF_BLOCKS);
 
     public static boolean fireproofBlocks = false;
 
@@ -31,9 +35,14 @@ public class CommonConfig
         builder.push("general");
         fireproofBlocksValue = builder
                 .comment("If true, framed blocks are completely fire proof")
-                .translation("config." + FramedConstants.MOD_ID + ".fireproof")
-                .define("fireproofBlocks", false);
+                .translation(TRANSLATION_FIREPROOF_BLOCKS)
+                .define(KEY_FIREPROOF_BLOCKS, false);
         builder.pop();
+    }
+
+    private static String translate(String key)
+    {
+        return Utils.translateConfig("common", key);
     }
 
     @SubscribeEvent

@@ -8,7 +8,7 @@ import xfacthd.framedblocks.client.data.ghost.*;
 import xfacthd.framedblocks.client.render.GhostBlockRenderer;
 import xfacthd.framedblocks.common.FBContent;
 
-public class GhostRenderBehaviours
+public final class GhostRenderBehaviours
 {
     public static void register()
     {
@@ -54,7 +54,12 @@ public class GhostRenderBehaviours
 
         GhostBlockRenderer.registerBehaviour(
                 new StandingAndWallBlockGhostRenderBehaviour(),
-                FBContent.blockFramedSign.get(), FBContent.blockFramedTorch.get(), FBContent.blockFramedSoulTorch.get()
+                FBContent.blockFramedSign.get(),
+                FBContent.blockFramedTorch.get(),
+                FBContent.blockFramedSoulTorch.get(),
+                FBContent.blockFramedRedstoneTorch.get(),
+                FBContent.blockFramedHalfSlope.get(),
+                FBContent.blockFramedDoubleHalfSlope.get()
         );
 
         GhostBlockRenderer.registerBehaviour(
@@ -64,7 +69,18 @@ public class GhostRenderBehaviours
 
         GhostBlockRenderer.registerBehaviour(
                 new RailSlopeGhostRenderBehaviour(),
-                Items.RAIL
+                Items.RAIL,
+                Items.POWERED_RAIL,
+                Items.DETECTOR_RAIL,
+                Items.ACTIVATOR_RAIL
+        );
+
+        GhostBlockRenderer.registerBehaviour(
+                new FancyRailGhostRenderBehaviour(),
+                FBContent.blockFramedFancyRail.get().asItem(),
+                FBContent.blockFramedFancyPoweredRail.get().asItem(),
+                FBContent.blockFramedFancyDetectorRail.get().asItem(),
+                FBContent.blockFramedFancyActivatorRail.get().asItem()
         );
 
         GhostBlockRenderer.registerBehaviour(
@@ -72,4 +88,8 @@ public class GhostRenderBehaviours
                 FBContent.itemFramedBlueprint.get()
         );
     }
+
+
+
+    private GhostRenderBehaviours() { }
 }

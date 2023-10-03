@@ -7,10 +7,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
-import xfacthd.framedblocks.client.model.FramedTargetModel;
+import xfacthd.framedblocks.client.model.cube.FramedTargetModel;
 import xfacthd.framedblocks.common.blockentity.FramedTargetBlockEntity;
 
-public class FramedTargetBlockColor extends FramedBlockColor implements ItemColor
+public final class FramedTargetBlockColor extends FramedBlockColor implements ItemColor
 {
     public static final FramedTargetBlockColor INSTANCE = new FramedTargetBlockColor();
 

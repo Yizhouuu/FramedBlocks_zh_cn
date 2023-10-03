@@ -8,11 +8,12 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.items.CapabilityItemHandler;
-import net.minecraftforge.items.SlotItemHandler;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.items.*;
 import xfacthd.framedblocks.common.FBContent;
 import xfacthd.framedblocks.common.blockentity.FramedChestBlockEntity;
 import xfacthd.framedblocks.common.blockentity.FramedStorageBlockEntity;
+import xfacthd.framedblocks.common.util.FramedUtils;
 
 public class FramedStorageMenu extends AbstractContainerMenu
 {
@@ -26,29 +27,23 @@ public class FramedStorageMenu extends AbstractContainerMenu
         Preconditions.checkArgument(blockEntity instanceof FramedStorageBlockEntity);
         this.blockEntity = (FramedStorageBlockEntity) blockEntity;
 
-        this.blockEntity.getCapability(CapabilityItemHandler.ITEM_HANDLER_CAPABILITY).ifPresent(handler ->
+        IItemHandler blockInv = this.blockEntity
+                .getCapability(ForgeCapabilities.ITEM_HANDLER)
+                .orElseThrow(IllegalStateException::new);
+        //noinspection ConstantConditions
+        if (this.blockEntity.getLevel().isClientSide())
         {
-            for (int row = 0; row < 3; ++row)
-            {
-                for (int col = 0; col < 9; ++col)
-                {
-                    addSlot(new SlotItemHandler(handler, col + row * 9, 8 + col * 18, 18 + row * 18));
-                }
-            }
-        });
+            blockInv = new ItemStackHandler(blockInv.getSlots());
+        }
 
         for (int row = 0; row < 3; ++row)
         {
             for (int col = 0; col < 9; ++col)
             {
-                addSlot(new Slot(inv, col + row * 9 + 9, 8 + col * 18, 85 + row * 18));
+                addSlot(new SlotItemHandler(blockInv, col + row * 9, 8 + col * 18, 18 + row * 18));
             }
         }
-
-        for (int col = 0; col < 9; ++col)
-        {
-            addSlot(new Slot(inv, col, 8 + col * 18, 143));
-        }
+        FramedUtils.addPlayerInvSlots(this::addSlot, inv, 8, 85);
     }
 
     public FramedStorageMenu(int windowId, Inventory inv, FriendlyByteBuf extraData)

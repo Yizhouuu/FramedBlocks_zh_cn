@@ -20,16 +20,16 @@ apply plugin: 'org.spongepowered.mixin'
 
 jarJar.enable()
 
-version = '6.4.0'
+version = '6.8.6'
 group = 'xfacthd.framedblocks'
 archivesBaseName = 'FramedBlocks'
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-//Print out JVM information so that we know what version is running. Extreamly useful for people to know when helping you.
+//Print out JVM information so that we know what version is running. Extremely useful for people to know when helping you.
 println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
 
 minecraft {
-    mappings channel: 'parchment', version: '2022.08.10-1.19.2'
+    mappings channel: 'parchment', version: '2022.10.16-1.19.2'
     
     accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
 
@@ -44,11 +44,6 @@ minecraft {
 
             // Recommended logging level for the console
             property 'forge.logging.console.level', 'debug'
-
-            property 'mixin.env.remapRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${buildDir}/createSrgToMcp/output.srg"
-
-            arg "-mixin.config=framedblocks.mixin.json"
 
             mods {
                 framedblocks {
@@ -133,30 +128,46 @@ repositories {
     maven {
         url "https://www.cursemaven.com"
     }
+    maven {
+        url = "https://maven.tterrag.com/"
+    }
+    maven {
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
     mavenCentral()
 }
 
 dependencies {
-    minecraft 'net.minecraftforge:forge:1.19.2-43.0.7'
+    minecraft 'net.minecraftforge:forge:1.19.2-43.2.14'
 
-    //compileOnly fg.deobf("curse.maven:ctm-267602:3737369")
+    compileOnly fg.deobf("curse.maven:ctm-267602:4393695")
 
-    //runtimeOnly fg.deobf("curse.maven:puzzleslib-495476:3873579") //Only needed when Diagonal Fences is switched to implementation
+    //runtimeOnly fg.deobf("curse.maven:puzzleslib-495476:4499052") //Only needed when Diagonal Fences or Diagonal Windows is switched to implementation
     compileOnly fg.deobf("curse.maven:diagonalfences-458048:3876555")
+    compileOnly fg.deobf("curse.maven:diagonalwindows-891328:4660580")
 
-    compileOnly fg.deobf("curse.maven:buildinggadgets-298187:3829297")
+    implementation fg.deobf("curse.maven:buildinggadgets-298187:4002496")
 
-    runtimeOnly fg.deobf("curse.maven:jei-238222:3876379")
+    compileOnly(fg.deobf("mezz.jei:jei-1.19.2-common-api:11.6.0.1010"))
+    compileOnly(fg.deobf("mezz.jei:jei-1.19.2-forge-api:11.6.0.1010"))
+    runtimeOnly(fg.deobf("mezz.jei:jei-1.19.2-forge:11.6.0.1010"))
+
+    //runtimeOnly fg.deobf("curse.maven:structure-gel-api-378802:4489756")
+    //runtimeOnly fg.deobf("curse.maven:blue-skies-312918:3966273")
+
     //runtimeOnly fg.deobf("curse.maven:spark-361579:3767286")
 
-    //runtimeOnly fg.deobf("curse.maven:magnesium_sodium-532724:3556734")
-    //runtimeOnly fg.deobf("curse.maven:rubidium_sodium-574856:3633735")
+    //runtimeOnly fg.deobf("curse.maven:rubidium-574856:4568727")
+    //runtimeOnly fg.deobf("curse.maven:oculus-581495:4578731")
+    //runtimeOnly fg.deobf("curse.maven:modernfix-790626:4593890")
 
-    //compileOnly fg.deobf("curse.maven:flywheel-486392:3737402")
-    //runtimeOnly fg.deobf("curse.maven:create-328085:3737418") //Only needed when Flywheel is switched to implementation
+    compileOnly fg.deobf("com.simibubi.create:create-1.19.2:0.5.1.a-29:slim") { transitive = false }
+    compileOnly fg.deobf("com.jozufozu.flywheel:flywheel-forge-1.19.2:0.6.8.a-14")
+    //runtimeOnly fg.deobf("com.tterrag.registrate:Registrate:MC1.19-1.1.5") //Only needed when Create and/or Flywheel are switched to implementation
 
-    compileOnly fg.deobf("curse.maven:moonlight-499980:3920391")
-    compileOnly fg.deobf("curse.maven:supplementaries-412082:3920399")
+    compileOnly fg.deobf("curse.maven:moonlight-499980:4348554")
+    compileOnly fg.deobf("curse.maven:supplementaries-412082:4352660")
 
     compileOnly fg.deobf("curse.maven:nocubes-309664:3944569")
 
@@ -165,11 +176,21 @@ dependencies {
         transitive(false)
     }
 
+    implementation(annotationProcessor("io.github.llamalad7:mixinextras-common:0.2.0-rc.4"))
+    implementation(jarJar("io.github.llamalad7:mixinextras-forge:0.2.0-rc.4")) {
+        jarJar.ranged(it, "[0.2.0-rc.4,)")
+    }
+
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
 mixin {
     add sourceSets.main, "framedblocks.refmap.json"
+    config "framedblocks.mixin.json"
+}
+
+processResources {
+    //exclude("framedblocks.mixin.json")
 }
 
 processTestResources {
@@ -192,8 +213,7 @@ jar {
             "Implementation-Title": project.name,
             "Implementation-Version": "${project.version}",
             "Implementation-Vendor" : "XFactHD",
-            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-            "MixinConfigs": "framedblocks.mixin.json"
+            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
 }

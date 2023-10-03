@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-public class FramedMixinConfigPlugin implements IMixinConfigPlugin
+public final class FramedMixinConfigPlugin implements IMixinConfigPlugin
 {
     @Override
     public void onLoad(String mixinPackage) { }
@@ -18,11 +18,6 @@ public class FramedMixinConfigPlugin implements IMixinConfigPlugin
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName)
     {
-        if (mixinClassName.equals("xfacthd.framedblocks.client.util.mixin.MixinIFramedBlock"))
-        {
-            return checkClassExists("team.chisel.ctm.api.IFacade");
-        }
-
         return true;
     }
 
@@ -40,12 +35,12 @@ public class FramedMixinConfigPlugin implements IMixinConfigPlugin
 
 
 
-    @SuppressWarnings("SameParameterValue")
+    @SuppressWarnings({ "SameParameterValue", "unused" })
     private static boolean checkClassExists(String className)
     {
         try
         {
-            Class.forName(className);
+            Class.forName(className, false, FramedMixinConfigPlugin.class.getClassLoader());
             return true;
         }
         catch (ClassNotFoundException e)

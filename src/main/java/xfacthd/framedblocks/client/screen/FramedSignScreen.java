@@ -21,12 +21,9 @@ import net.minecraft.network.chat.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.ChunkRenderTypeSet;
 import net.minecraftforge.client.event.TextureStitchEvent;
 import net.minecraftforge.client.model.data.ModelData;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 import xfacthd.framedblocks.FramedBlocks;
 import xfacthd.framedblocks.api.util.*;
@@ -37,11 +34,10 @@ import xfacthd.framedblocks.common.blockentity.FramedSignBlockEntity;
 import java.util.List;
 
 @SuppressWarnings("deprecation")
-@Mod.EventBusSubscriber(modid = FramedConstants.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class FramedSignScreen extends Screen
 {
     private static final Table<BlockState, Direction, TextureAtlasSprite> SPRITE_CACHE = HashBasedTable.create();
-    private static final ResourceLocation DEFAULT_TEXTURE = new ResourceLocation(FramedConstants.MOD_ID, "block/framed_block");
+    private static final ResourceLocation DEFAULT_TEXTURE = Utils.rl("block/framed_block");
     public static final Component TITLE = Utils.translate("title", "sign.edit");
     public static final Component DONE = Utils.translate("button", "gui.done");
     private static final int TEX_W = 128;
@@ -298,6 +294,11 @@ public class FramedSignScreen extends Screen
         return SPRITE_CACHE.get(camoState, front);
     }
 
-    @SubscribeEvent
-    public static void onTextureStitch(final TextureStitchEvent.Pre event) { SPRITE_CACHE.clear(); }
+    public static void onTextureStitch(final TextureStitchEvent.Pre event)
+    {
+        if (event.getAtlas().location().equals(TextureAtlas.LOCATION_BLOCKS))
+        {
+            SPRITE_CACHE.clear();
+        }
+    }
 }

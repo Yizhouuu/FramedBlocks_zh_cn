@@ -10,7 +10,7 @@ import xfacthd.framedblocks.api.util.FramedConstants;
 import xfacthd.framedblocks.common.FBContent;
 import xfacthd.framedblocks.api.util.Utils;
 
-public class FramedItemTagProvider extends ItemTagsProvider
+public final class FramedItemTagProvider extends ItemTagsProvider
 {
     public FramedItemTagProvider(DataGenerator gen, BlockTagsProvider provider, ExistingFileHelper existingFileHelper)
     {
@@ -35,7 +35,8 @@ public class FramedItemTagProvider extends ItemTagsProvider
         tag(Utils.DISABLE_INTANGIBLE).addTag(Utils.WRENCH).add(
                 FBContent.itemFramedHammer.get(),
                 FBContent.itemFramedBlueprint.get(),
-                FBContent.itemFramedScrewdriver.get()
+                FBContent.itemFramedScrewdriver.get(),
+                FBContent.itemFramedKey.get()
         );
     }
 }

@@ -19,7 +19,7 @@ import xfacthd.framedblocks.common.blockentity.FramedDoubleBlockEntity;
 import xfacthd.framedblocks.common.util.FramedUtils;
 import xfacthd.framedblocks.common.util.ServerConfig;
 
-class FramedBlockEntityData extends NBTTileEntityData
+final class FramedBlockEntityData extends NBTTileEntityData
 {
     public FramedBlockEntityData(FramedBlockEntity be) { super(writeBlockEntityTag(be), buildMaterialList(be)); }
 
@@ -56,7 +56,7 @@ class FramedBlockEntityData extends NBTTileEntityData
     }
 
     @Override
-    public ITileDataSerializer getSerializer() { return BuildingGadgetsCompat.FRAMED_SERIALIZER.get(); }
+    public ITileDataSerializer getSerializer() { return BuildingGadgetsCompat.GuardedAccess.FRAMED_SERIALIZER.get(); }
 
     private static CompoundTag writeBlockEntityTag(FramedBlockEntity be)
     {

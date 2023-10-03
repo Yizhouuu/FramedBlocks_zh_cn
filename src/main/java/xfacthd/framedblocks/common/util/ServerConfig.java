@@ -10,20 +10,36 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.apache.commons.lang3.tuple.Pair;
-import xfacthd.framedblocks.api.util.FramedConstants;
+import xfacthd.framedblocks.api.util.Utils;
 
-public class ServerConfig
+public final class ServerConfig
 {
     public static final ForgeConfigSpec SPEC;
     public static final ServerConfig INSTANCE;
 
+    private static final String KEY_ALLOW_BLOCK_ENTITIES = "allowBlockEntities";
+    private static final String KEY_ENABLE_INTANGIBILITY = "enableIntangibleFeature";
+    private static final String KEY_INTANGIBLE_MARKER = "intangibleMarkerItem";
+    private static final String KEY_ONE_WAY_WINDOW_OWNABLE = "oneWayWindowOwnable";
+    private static final String KEY_CONSUME_CAMO_ITEM = "consumeCamoItem";
+
+    public static final String TRANSLATION_ALLOW_BLOCK_ENTITIES = translate(KEY_ALLOW_BLOCK_ENTITIES);
+    public static final String TRANSLATION_ENABLE_INTANGIBILITY = translate(KEY_ENABLE_INTANGIBILITY);
+    public static final String TRANSLATION_INTANGIBLE_MARKER = translate(KEY_INTANGIBLE_MARKER);
+    public static final String TRANSLATION_ONE_WAY_WINDOW_OWNABLE = translate(KEY_ONE_WAY_WINDOW_OWNABLE);
+    public static final String TRANSLATION_CONSUME_CAMO_ITEM = translate(KEY_CONSUME_CAMO_ITEM);
+
     public static boolean allowBlockEntities;
     public static boolean enableIntangibleFeature;
     public static Item intangibleMarkerItem;
+    public static boolean oneWayWindowOwnable;
+    public static boolean consumeCamoItem;
 
     private final ForgeConfigSpec.BooleanValue allowBlockEntitiesValue;
     private final ForgeConfigSpec.BooleanValue enableIntangibleFeatureValue;
     private final ForgeConfigSpec.ConfigValue<String> intangibleMarkerItemValue;
+    private final ForgeConfigSpec.BooleanValue oneWayWindowOwnableValue;
+    private final ForgeConfigSpec.BooleanValue consumeCamoItemValue;
 
     static
     {
@@ -40,16 +56,24 @@ public class ServerConfig
         builder.push("general");
         allowBlockEntitiesValue = builder
                 .comment("Whether blocks with block entities can be placed in Framed Blocks")
-                .translation("config." + FramedConstants.MOD_ID + ".allowBlockEntities")
-                .define("allowBlockEntities", false);
+                .translation(TRANSLATION_ALLOW_BLOCK_ENTITIES)
+                .define(KEY_ALLOW_BLOCK_ENTITIES, false);
         enableIntangibleFeatureValue = builder
                 .comment("Enables the intangbility feature. Disabling this also prevents moving through blocks that are already marked as intangible")
-                .translation("config." + FramedConstants.MOD_ID + ".enableIntangibleFeature")
-                .define("enableIntangibleFeature", false);
+                .translation(TRANSLATION_ENABLE_INTANGIBILITY)
+                .define(KEY_ENABLE_INTANGIBILITY, false);
         intangibleMarkerItemValue = builder
                 .comment("The item to use for making Framed Blocks intangible. The value must be a valid item registry name")
-                .translation("config." + FramedConstants.MOD_ID + ".intangibleMarkerItem")
-                .define("intangibleMarkerItem", ForgeRegistries.ITEMS.getKey(Items.PHANTOM_MEMBRANE).toString(), ServerConfig::validateItemName);
+                .translation(TRANSLATION_INTANGIBLE_MARKER)
+                .define(KEY_INTANGIBLE_MARKER, ForgeRegistries.ITEMS.getKey(Items.PHANTOM_MEMBRANE).toString(), ServerConfig::validateItemName);
+        oneWayWindowOwnableValue = builder
+                .comment("If true, only the player who placed the Framed One-Way Window can modify the window direction")
+                .translation(TRANSLATION_ONE_WAY_WINDOW_OWNABLE)
+                .define(KEY_ONE_WAY_WINDOW_OWNABLE, true);
+        consumeCamoItemValue = builder
+                .comment("If true, applying a camo will consume the item and removing the camo will drop it again")
+                .translation(TRANSLATION_CONSUME_CAMO_ITEM)
+                .define(KEY_CONSUME_CAMO_ITEM, true);
         builder.pop();
     }
 
@@ -66,6 +90,11 @@ public class ServerConfig
         return false;
     }
 
+    private static String translate(String key)
+    {
+        return Utils.translateConfig("server", key);
+    }
+
     @SubscribeEvent
     public void onConfigReloaded(ModConfigEvent event)
     {
@@ -74,6 +103,8 @@ public class ServerConfig
             allowBlockEntities = allowBlockEntitiesValue.get();
             enableIntangibleFeature = enableIntangibleFeatureValue.get();
             intangibleMarkerItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation(intangibleMarkerItemValue.get()));
+            oneWayWindowOwnable = oneWayWindowOwnableValue.get();
+            consumeCamoItem = consumeCamoItemValue.get();
         }
     }
 }

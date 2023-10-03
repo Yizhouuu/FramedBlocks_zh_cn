@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "framedblocks:framed_cube"
+    },
+    {
+      "item": "framedblocks:framed_hammer"
+    }
+  ],
+  "result": {
+    "item": "framedblocks:framed_mini_cube"
+  }
+}

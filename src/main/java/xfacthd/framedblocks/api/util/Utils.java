@@ -1,6 +1,7 @@
 package xfacthd.framedblocks.api.util;
 
 import com.google.common.base.Preconditions;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.*;
 import net.minecraft.nbt.*;
 import net.minecraft.nbt.Tag;
@@ -9,10 +10,13 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.*;
 import net.minecraft.util.Mth;
+import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.entity.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -27,33 +31,43 @@ import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
+import xfacthd.framedblocks.api.block.FramedBlockEntity;
+import xfacthd.framedblocks.api.data.CamoContainer;
+import xfacthd.framedblocks.api.data.EmptyCamoContainer;
 import xfacthd.framedblocks.api.util.client.ClientUtils;
 
 import java.lang.invoke.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.function.Consumer;
 
 public final class Utils
 {
+    private static final Direction[] DIRECTIONS = Direction.values();
     public static final TagKey<Block> FRAMEABLE = blockTag("frameable");
     public static final TagKey<Block> BLACKLIST = blockTag("blacklisted");
     /**Allow other mods to whitelist their BEs, circumventing the config setting*/
     public static final TagKey<Block> BE_WHITELIST = blockTag("blockentity_whitelisted");
+    public static final TagKey<Block> CAMO_SUSTAIN_PLANT = blockTag("camo_sustain_plant");
     public static final TagKey<Item> WRENCH = itemTag("forge", "tools/wrench");
-    /** Allow other mods to add items that temporarily disable intangibility to allow interaction with the targetted block */
+    /** Allow other mods to add items that temporarily disable intangibility to allow interaction with the targeted block */
     public static final TagKey<Item> DISABLE_INTANGIBLE = itemTag("disable_intangible");
 
     public static final RegistryObject<Item> FRAMED_HAMMER = RegistryObject.create(
-            new ResourceLocation(FramedConstants.MOD_ID, "framed_hammer"),
-            ForgeRegistries.ITEMS
+            Utils.rl("framed_hammer"), ForgeRegistries.ITEMS
+    );
+    public static final RegistryObject<Item> FRAMED_WRENCH = RegistryObject.create(
+            Utils.rl("framed_wrench"), ForgeRegistries.ITEMS
     );
     public static final RegistryObject<Item> FRAMED_KEY = RegistryObject.create(
-            new ResourceLocation(FramedConstants.MOD_ID, "framed_key"),
-            ForgeRegistries.ITEMS
+            Utils.rl("framed_key"), ForgeRegistries.ITEMS
     );
     public static final RegistryObject<Item> FRAMED_SCREWDRIVER = RegistryObject.create(
-            new ResourceLocation(FramedConstants.MOD_ID, "framed_screwdriver"),
-            ForgeRegistries.ITEMS
+            Utils.rl("framed_screwdriver"), ForgeRegistries.ITEMS
+    );
+    public static final RegistryObject<Item> FRAMED_REINFORCEMENT = RegistryObject.create(
+            Utils.rl("framed_reinforcement"), ForgeRegistries.ITEMS
     );
 
     public static VoxelShape rotateShape(Direction from, Direction to, VoxelShape shape)
@@ -143,12 +157,53 @@ public final class Utils
 
     public static MutableComponent translate(String prefix, String postfix, Object... arguments)
     {
-        return Component.translatable(prefix + "." + FramedConstants.MOD_ID + "." + postfix, arguments);
+        return Component.translatable(translationKey(prefix, postfix), arguments);
     }
 
     public static MutableComponent translate(String prefix, String postfix)
     {
-        return Component.translatable(prefix + "." + FramedConstants.MOD_ID + "." + postfix);
+        return Component.translatable(translationKey(prefix, postfix));
+    }
+
+    public static String translationKey(String prefix, String postfix)
+    {
+        String key = "";
+        if (prefix != null)
+        {
+            key = prefix + ".";
+        }
+        key += FramedConstants.MOD_ID;
+        if (postfix != null)
+        {
+            key += "." + postfix;
+        }
+        return key;
+    }
+
+    public static String translateConfig(String type, String key)
+    {
+        return translationKey("config", type + "." + key);
+    }
+
+    public static <T extends Enum<T> & StringRepresentable> Component[] buildEnumTranslations(
+            String prefix, String postfix, T[] values, ChatFormatting... formatting
+    )
+    {
+        return Arrays.stream(values)
+                .map(v -> translate(prefix, postfix + "." + v.getSerializedName()))
+                .map(c -> c.withStyle(formatting))
+                .toArray(Component[]::new);
+    }
+
+    public static <T extends Enum<T>> Component[] bindEnumTranslation(String key, T[] values, Component[] valueTranslations)
+    {
+        Preconditions.checkArgument(values.length == valueTranslations.length, "Value and translation arrays must have the same length");
+        Component[] components = new Component[values.length];
+        for (T v : values)
+        {
+            components[v.ordinal()] = Component.translatable(key, valueTranslations[v.ordinal()]);
+        }
+        return components;
     }
 
     public static BlockEntity getBlockEntitySafe(BlockGetter blockGetter, BlockPos pos)
@@ -175,6 +230,108 @@ public final class Utils
     public static boolean isY(Direction dir) { return dir.getAxis() == Direction.Axis.Y; }
 
     public static boolean isZ(Direction dir) { return dir.getAxis() == Direction.Axis.Z; }
+
+    public static Direction.Axis nextAxisNotEqualTo(Direction.Axis axis, Direction.Axis except)
+    {
+        Direction.Axis[] axes = Direction.Axis.VALUES;
+        do
+        {
+            axis = axes[(axis.ordinal() + 1) % axes.length];
+        }
+        while (axis == except);
+
+        return axis;
+    }
+
+    /**
+     * Mirrors a block that is oriented towards a face of the block space.
+     * @param state The {@link BlockState} to mirror
+     * @param mirror The {@link Mirror} to apply to the state
+     * @apiNote The given state must have the {@link FramedProperties#FACING_HOR} property
+     */
+    public static BlockState mirrorFaceBlock(BlockState state, Mirror mirror)
+    {
+        return mirrorFaceBlock(state, FramedProperties.FACING_HOR, mirror);
+    }
+
+    /**
+     * Mirrors a block that is oriented towards a face of the block space
+     * @param state The {@link BlockState} to mirror
+     * @param property The {@link DirectionProperty} that should be mirrored on the given state
+     * @param mirror The {@link Mirror} to apply to the state
+     * @apiNote The given property must support at least all four cardinal directions
+     */
+    public static BlockState mirrorFaceBlock(BlockState state, DirectionProperty property, Mirror mirror)
+    {
+        if (mirror == Mirror.NONE)
+        {
+            return state;
+        }
+
+        Direction dir = state.getValue(property);
+        //Y directions are inherently ignored
+        if ((mirror == Mirror.FRONT_BACK && isX(dir)) || (mirror == Mirror.LEFT_RIGHT && isZ(dir)))
+        {
+            return state.setValue(property, dir.getOpposite());
+        }
+        return state;
+    }
+
+    /**
+     * Mirrors a block that is oriented into a corner of the block space.
+     * @param state The {@link BlockState} to mirror
+     * @param mirror The {@link Mirror} to apply to the state
+     * @apiNote The given state must have the {@link FramedProperties#FACING_HOR} property
+     */
+    public static BlockState mirrorCornerBlock(BlockState state, Mirror mirror)
+    {
+        return mirrorCornerBlock(state, FramedProperties.FACING_HOR, mirror);
+    }
+
+    /**
+     * Mirrors a block that is oriented into a corner of the block space
+     * @param state The {@link BlockState} to mirror
+     * @param property The {@link DirectionProperty} that should be mirrored on the given state
+     * @param mirror The {@link Mirror} to apply to the state
+     * @apiNote The given property must support at least all four cardinal directions
+     */
+    public static BlockState mirrorCornerBlock(BlockState state, DirectionProperty property, Mirror mirror)
+    {
+        if (mirror == Mirror.NONE)
+        {
+            return state;
+        }
+
+        Direction dir = state.getValue(property);
+        if (isY(dir))
+        {
+            return state;
+        }
+
+        if (mirror == Mirror.LEFT_RIGHT)
+        {
+            dir = switch (dir)
+            {
+                case NORTH -> Direction.WEST;
+                case EAST -> Direction.SOUTH;
+                case SOUTH -> Direction.EAST;
+                case WEST -> Direction.NORTH;
+                default -> throw new IllegalArgumentException("Unreachable!");
+            };
+        }
+        else
+        {
+            dir = switch (dir)
+            {
+                case NORTH -> Direction.EAST;
+                case EAST -> Direction.NORTH;
+                case SOUTH -> Direction.WEST;
+                case WEST -> Direction.SOUTH;
+                default -> throw new IllegalArgumentException("Unreachable!");
+            };
+        }
+        return state.setValue(property, dir);
+    }
 
     public static TagKey<Block> blockTag(String name) { return blockTag(FramedConstants.MOD_ID, name); }
 
@@ -233,6 +390,55 @@ public final class Utils
             }
         }
         return null;
+    }
+
+    public static void forAllDirections(Consumer<Direction> consumer)
+    {
+        consumer.accept(null);
+        for (Direction dir : DIRECTIONS)
+        {
+            consumer.accept(dir);
+        }
+    }
+
+    @Deprecated(forRemoval = true)
+    public static void wrapInStateCopy(LevelAccessor level, BlockPos pos, boolean writeToCamoTwo, Runnable action)
+    {
+        wrapInStateCopy(level, pos, null, ItemStack.EMPTY, writeToCamoTwo, false, action);
+    }
+
+    public static void wrapInStateCopy(
+            LevelAccessor level, BlockPos pos, Player player, ItemStack stack, boolean writeToCamoTwo, boolean consumeItem, Runnable action
+    )
+    {
+        CamoContainer camo = EmptyCamoContainer.EMPTY;
+        boolean glowing = false;
+        boolean intangible = false;
+        boolean reinforced = false;
+
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            camo = be.getCamo();
+            glowing = be.isGlowing();
+            intangible = be.isIntangible(null);
+            reinforced = be.isReinforced();
+        }
+
+        action.run();
+
+        if (consumeItem && !player.isCreative())
+        {
+            stack.shrink(1);
+            player.getInventory().setChanged();
+        }
+
+        if (level.getBlockEntity(pos) instanceof FramedBlockEntity be)
+        {
+            be.setCamo(camo, writeToCamoTwo);
+            be.setGlowing(glowing);
+            be.setIntangible(intangible);
+            be.setReinforced(reinforced);
+        }
     }
 
     public static ResourceLocation rl(String path) { return new ResourceLocation(FramedConstants.MOD_ID, path); }

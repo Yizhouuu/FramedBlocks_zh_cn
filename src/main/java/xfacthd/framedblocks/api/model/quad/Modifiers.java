@@ -2,6 +2,7 @@ package xfacthd.framedblocks.api.model.quad;
 
 import com.google.common.base.Preconditions;
 import com.mojang.math.*;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import xfacthd.framedblocks.api.util.Utils;
@@ -15,6 +16,8 @@ public final class Modifiers
     private static final float SCALE_ROTATION_22_5 = 1.0F / (float)Math.cos(Math.PI / 8F) - 1.0F;
     private static final Vector3f ONE = new Vector3f(1, 1, 1);
     private static final Vector3f CENTER = new Vector3f(.5F, .5F, .5F);
+    private static final Vector3f BOTTOM_CENTER = new Vector3f(.5F, 0, .5F);
+    private static final Vector3f TOP_CENTER = new Vector3f(.5F, 1, .5F);
     private static final float PRISM_TILT_ANGLE = (float)Math.toDegrees(Math.atan(.5D));
     private static final Vector3f[] PRISM_DIR_TO_ORIGIN_VECS = new Vector3f[]
     {
@@ -141,18 +144,19 @@ public final class Modifiers
         float toXZ2 = positive ? Math.min(xz2, targetL) : Math.max(xz2, targetL);
 
         float[][] uv = data.uv();
-        boolean rotated = ModelUtils.isQuadRotated(uv);
-        boolean mirrored = ModelUtils.isQuadMirrored(uv);
+        boolean rotated = data.uvRotated();
+        boolean mirrored = data.uvMirrored();
+        TextureAtlasSprite sprite = data.quad().getSprite();
 
         if (xAxis)
         {
-            ModelUtils.remapUV(quadDir, pos[1][coordIdx], pos[2][coordIdx], toXZ1, uv, 1, 2, idxR, false, false, rotated, mirrored);
-            ModelUtils.remapUV(quadDir, pos[0][coordIdx], pos[3][coordIdx], toXZ2, uv, 0, 3, idxL, false, false, rotated, mirrored);
+            ModelUtils.remapUV(quadDir, sprite, pos[1][coordIdx], pos[2][coordIdx], toXZ1, uv, 1, 2, idxR, false, false, rotated, mirrored);
+            ModelUtils.remapUV(quadDir, sprite, pos[0][coordIdx], pos[3][coordIdx], toXZ2, uv, 0, 3, idxL, false, false, rotated, mirrored);
         }
         else
         {
-            ModelUtils.remapUV(quadDir, pos[1][coordIdx], pos[0][coordIdx], toXZ1, uv, 0, 1, idxR, true, !up, rotated, mirrored);
-            ModelUtils.remapUV(quadDir, pos[2][coordIdx], pos[3][coordIdx], toXZ2, uv, 3, 2, idxL, true, !up, rotated, mirrored);
+            ModelUtils.remapUV(quadDir, sprite, pos[1][coordIdx], pos[0][coordIdx], toXZ1, uv, 0, 1, idxR, true, !up, rotated, mirrored);
+            ModelUtils.remapUV(quadDir, sprite, pos[2][coordIdx], pos[3][coordIdx], toXZ2, uv, 3, 2, idxL, true, !up, rotated, mirrored);
         }
 
         pos[idxR][coordIdx] = toXZ1;
@@ -162,7 +166,7 @@ public final class Modifiers
     }
 
     /**
-     * Cuts the quad pointing horizontally at the top and botom edge
+     * Cuts the quad pointing horizontally at the top and bottom edge
      * @param length The target length from either starting edge
      */
     public static QuadModifier.Modifier cutSideUpDown(float length)
@@ -222,10 +226,11 @@ public final class Modifiers
         float toY2 = downwards ? Math.max(y2, targetL) : Math.min(y2, targetL);
 
         float[][] uv = data.uv();
-        boolean rotated = ModelUtils.isQuadRotated(uv);
-        boolean mirrored = ModelUtils.isQuadMirrored(uv);
-        ModelUtils.remapUV(quadDir, pos[1][1], pos[0][1], toY1, uv, 0, 1, idx1, true, true, rotated, mirrored);
-        ModelUtils.remapUV(quadDir, pos[2][1], pos[3][1], toY2, uv, 3, 2, idx2, true, true, rotated, mirrored);
+        boolean rotated = data.uvRotated();
+        boolean mirrored = data.uvMirrored();
+        TextureAtlasSprite sprite = data.quad().getSprite();
+        ModelUtils.remapUV(quadDir, sprite, pos[1][1], pos[0][1], toY1, uv, 0, 1, idx1, true, !mirrored, rotated, mirrored);
+        ModelUtils.remapUV(quadDir, sprite, pos[2][1], pos[3][1], toY2, uv, 3, 2, idx2, true, !mirrored, rotated, mirrored);
 
         pos[idx1][1] = toY1;
         pos[idx2][1] = toY2;
@@ -317,10 +322,11 @@ public final class Modifiers
         float toXZ2 = positive ? Math.max(xz2, targetBot) : Math.min(xz2, targetBot);
 
         float[][] uv = data.uv();
-        boolean rotated = ModelUtils.isQuadRotated(uv);
-        boolean mirrored = ModelUtils.isQuadMirrored(uv);
-        ModelUtils.remapUV(quadDir, pos[0][coordIdx], pos[3][coordIdx], toXZ1, uv, 0, 3, idx1, false, positive != towardsRight, rotated, mirrored);
-        ModelUtils.remapUV(quadDir, pos[1][coordIdx], pos[2][coordIdx], toXZ2, uv, 1, 2, idx2, false, positive != towardsRight, rotated, mirrored);
+        boolean rotated = data.uvRotated();
+        boolean mirrored = data.uvMirrored();
+        TextureAtlasSprite sprite = data.quad().getSprite();
+        ModelUtils.remapUV(quadDir, sprite, pos[0][coordIdx], pos[3][coordIdx], toXZ1, uv, 0, 3, idx1, false, positive != towardsRight, rotated, mirrored);
+        ModelUtils.remapUV(quadDir, sprite, pos[1][coordIdx], pos[2][coordIdx], toXZ2, uv, 1, 2, idx2, false, positive != towardsRight, rotated, mirrored);
 
         pos[idx1][coordIdx] = toXZ1;
         pos[idx2][coordIdx] = toXZ2;
@@ -398,20 +404,55 @@ public final class Modifiers
     }
 
     /**
-     * Cuts a triangle quad with the tip centered horizontally and pointing up or down.
+     * Cuts the quad pointing horizontally at the edge given by {@code cutDir}
+     * @param cutDir The direction towards the cut edge
+     * @param lengthCW The target length of the right corner (cut direction rotated clockwise) from the starting edge
+     * @param lengthCCW The target length of the left corner (cut direction rotated counter-clockwise) from the starting edge
+     */
+    public static QuadModifier.Modifier cutSide(Direction cutDir, float lengthCW, float lengthCCW)
+    {
+        return data ->
+        {
+            Direction quadDir = data.quad().getDirection();
+            Preconditions.checkState(!Utils.isY(quadDir), "Quad direction must be horizontal");
+            Preconditions.checkState(quadDir.getAxis() != cutDir.getAxis(), "Cut direction must be prependicular to the quad direction");
+
+            if (Utils.isY(cutDir))
+            {
+                boolean down = cutDir == Direction.DOWN;
+                float lenRight = down ? lengthCW : lengthCCW;
+                float lenLeft = down ? lengthCCW : lengthCW;
+
+                return cutSideUpDown(data, down, lenRight, lenLeft);
+            }
+            else
+            {
+                boolean right = cutDir == quadDir.getClockWise();
+                float lenTop = right ? lengthCW : lengthCCW;
+                float lenBottom = right ? lengthCCW : lengthCW;
+
+                return cutSideLeftRight(data, right, lenTop, lenBottom);
+            }
+        };
+    }
+
+    /**
+     * Cuts a triangle quad with the tip centered horizontally and pointing up or down from a horizontal quad.
      * The quad will have the right edge pushed back and the tip tilted to the top or bottom left corner
-     * @param up Wether the tip should point up or down
-     * @param back Wether the tip should tilt forward or backward
+     * @param up Whether the tip should point up or down
+     * @param back Whether the tip should tilt forward or backward
      */
     public static QuadModifier.Modifier cutPrismTriangle(boolean up, boolean back)
     {
         return data ->
         {
+            Direction quadDir = data.quad().getDirection();
+            Preconditions.checkArgument(!Utils.isY(quadDir), "Quad direction must not be on the Y axis");
+
             boolean leftCut = cutSideLeftRight(data, false, up ? .5F : 1, up ? 1 : .5F);
             boolean rightCut = cutSideLeftRight(data, true, up ? .5F : 1, up ? 1 : .5F);
             if (!leftCut && !rightCut) { return false; }
 
-            Direction quadDir = data.quad().getDirection();
             boolean northeast = quadDir == Direction.NORTH || quadDir == Direction.EAST;
 
             Vector3f origin = PRISM_DIR_TO_ORIGIN_VECS[quadDir.ordinal() - 2 + (up ? 0 : 4)];
@@ -419,6 +460,48 @@ public final class Modifiers
             if (northeast != up) { angle *= -1F; }
             rotate(data, quadDir.getClockWise().getAxis(), origin, angle, true);
             rotate(data, Direction.Axis.Y, origin, 45, true);
+
+            return true;
+        };
+    }
+
+    /**
+     * Cuts a triangle quad with the tip centered horizontally and pointing up or down from a vertical quad.
+     * The quad will have the right edge pushed back and the tip tilted to the top or bottom left corner
+     * @param cutDir The direction the triangle should point in the unrotated position
+     * @param back Whether the tip should tilt forward or backward
+     */
+    public static QuadModifier.Modifier cutPrismTriangle(Direction cutDir, boolean back)
+    {
+        Preconditions.checkArgument(!Utils.isY(cutDir), "Cut direction must be horizontal");
+        return data ->
+        {
+            Direction quadDir = data.quad().getDirection();
+            Preconditions.checkArgument(Utils.isY(quadDir), "Quad direction must be on the Y axis");
+
+            boolean leftCut = cutTopBottom(data, cutDir.getCounterClockWise(), .5F, 1);
+            boolean rightCut = cutTopBottom(data, cutDir.getClockWise(), 1, .5F);
+            if (!leftCut && !rightCut) { return false; }
+
+            boolean up = quadDir == Direction.UP;
+            boolean southwest = cutDir == Direction.SOUTH || cutDir == Direction.WEST;
+
+            Vector3f origin;
+            if (back)
+            {
+                origin = PRISM_DIR_TO_ORIGIN_VECS[cutDir.ordinal() - 2 + (!up ? 0 : 4)];
+            }
+            else
+            {
+                offset(data, cutDir, .5F);
+                origin = up ? TOP_CENTER : BOTTOM_CENTER;
+            }
+            float angle = up ? PRISM_TILT_ANGLE : -PRISM_TILT_ANGLE;
+            angle = (up ? 90F : -90F) - angle;
+            if (southwest == back) { angle *= -1F; }
+            rotate(data, cutDir.getClockWise().getAxis(), origin, angle, true);
+
+            rotate(data, Direction.Axis.Y, CENTER, 45, true);
 
             return true;
         };
@@ -565,16 +648,21 @@ public final class Modifiers
 
         return data ->
         {
-            int idx = dir.getAxis().ordinal();
-            float value = Utils.isPositive(dir) ? amount : (-1F * amount);
-
-            for (int i = 0; i < 4; i++)
-            {
-                data.pos()[i][idx] += value;
-            }
-
+            offset(data, dir, amount);
             return true;
         };
+    }
+
+    private static void offset(QuadModifier.Data data, Direction dir, float amount)
+    {
+        int idx = dir.getAxis().ordinal();
+        float value = Utils.isPositive(dir) ? amount : (-1F * amount);
+
+        for (int i = 0; i < 4; i++)
+        {
+            data.pos()[i][idx] += value;
+        }
+
     }
 
     /**
@@ -611,14 +699,50 @@ public final class Modifiers
 
         return data ->
         {
-            //TODO: implement interpolation
+            Direction dir = data.quad().getDirection();
+            float[][] pos = data.pos();
+            int idx = dir.getAxis().ordinal();
+            boolean positive = Utils.isPositive(dir);
+            boolean y = Utils.isY(dir);
+            Direction ccwDir = y ? dir : dir.getCounterClockWise();
+            boolean ccwPositive = Utils.isPositive(ccwDir);
+            int lerpXIdx = y ? 0 : ccwDir.getAxis().ordinal();
+            int lerpZIdx = y ? 2 : 1;
+            boolean invLerpX = !y && !ccwPositive;
+            boolean invLerpZ = !y || !ccwPositive;
 
-            int idx = data.quad().getDirection().getAxis().ordinal();
-            boolean positive = Utils.isPositive(data.quad().getDirection());
             for (int i = 0; i < 4; i++)
             {
-                data.pos()[i][idx] = positive ? posTarget[i] : 1F - posTarget[i];
+                float x0 = invLerpX ? (1F - pos[i][lerpXIdx]) : pos[i][lerpXIdx];
+                float z0 = invLerpZ ? (1F - pos[i][lerpZIdx]) : pos[i][lerpZIdx];
+                float target = (float) Mth.lerp2(x0, z0, posTarget[0], posTarget[3], posTarget[1], posTarget[2]);
+                data.pos()[i][idx] = positive ? target : (1F - target);
             }
+
+            return true;
+        };
+    }
+
+    /**
+     * Rotates the vertices of the quad by 90 degree
+     */
+    public static QuadModifier.Modifier rotateVertices()
+    {
+        return data ->
+        {
+            float[][] pos = data.pos();
+            float[][] uv = data.uv();
+            float[][] newPos = new float[4][3];
+            float[][] newUv = new float[4][2];
+
+            for (int i = 0; i < 4; i++)
+            {
+                System.arraycopy(pos[i], 0, newPos[(i + 1) % 4], 0, 3);
+                System.arraycopy(uv[i], 0, newUv[(i + 1) % 4], 0, 2);
+            }
+
+            System.arraycopy(newPos, 0, pos, 0, 4);
+            System.arraycopy(newUv, 0, uv, 0, 4);
 
             return true;
         };
@@ -630,7 +754,7 @@ public final class Modifiers
      * Rotates the quad on the given axis around the block center
      * @param axis The axis to rotate around
      * @param angle The angle of rotation in degrees
-     * @param rescale Wether the quad should be rescaled or retain its dimensions
+     * @param rescale Whether the quad should be rescaled or retain its dimensions
      */
     public static QuadModifier.Modifier rotateCentered(Direction.Axis axis, float angle, boolean rescale)
     {
@@ -641,7 +765,7 @@ public final class Modifiers
      * Rotates the quad on the given axis around the block center
      * @param axis The axis to rotate around
      * @param angle The angle of rotation in degrees
-     * @param rescale Wether the quad should be rescaled or retain its dimensions
+     * @param rescale Whether the quad should be rescaled or retain its dimensions
      * @param scaleMult Modifier for the scale vector, can be used to inhibit scaling on selected axis
      */
     public static QuadModifier.Modifier rotateCentered(Direction.Axis axis, float angle, boolean rescale, Vector3f scaleMult)
@@ -654,7 +778,7 @@ public final class Modifiers
      * @param axis The axis to rotate around
      * @param origin The point to rotate around
      * @param angle The angle of rotation in degrees
-     * @param rescale Wether the quad should be rescaled or retain its dimensions
+     * @param rescale Whether the quad should be rescaled or retain its dimensions
      */
     public static QuadModifier.Modifier rotate(Direction.Axis axis, Vector3f origin, float angle, boolean rescale)
     {
@@ -675,7 +799,7 @@ public final class Modifiers
      * @param axis The axis to rotate around
      * @param origin The point to rotate around
      * @param angle The angle of rotation in degrees
-     * @param rescale Wether the quad should be rescaled or retain its dimensions
+     * @param rescale Whether the quad should be rescaled or retain its dimensions
      * @param scaleMult Modifier for the scale vector, can be used to inhibit scaling on selected axes
      */
     public static QuadModifier.Modifier rotate(Direction.Axis axis, Vector3f origin, float angle, boolean rescale, Vector3f scaleMult)
@@ -740,6 +864,53 @@ public final class Modifiers
             pos[i][1] = vector4f.y() + origin.y();
             pos[i][2] = vector4f.z() + origin.z();
         }
+    }
+
+    public static QuadModifier.Modifier scaleFace(float factor, Vector3f origin)
+    {
+        return data ->
+        {
+            Vector3f scaleVec = switch (data.quad().getDirection().getAxis())
+                    {
+                        case X -> new Vector3f(0.0F, 1.0F, 1.0F);
+                        case Y -> new Vector3f(1.0F, 0.0F, 1.0F);
+                        case Z -> new Vector3f(1.0F, 1.0F, 0.0F);
+                    };
+
+            scaleVec.mul(factor);
+
+            float[][] pos = data.pos();
+            for (int i = 0; i < 4; i++)
+            {
+                Vector4f posVec = new Vector4f(pos[i][0] - origin.x(), pos[i][1] - origin.y(), pos[i][2] - origin.z(), 1.0F);
+                posVec.mul(scaleVec);
+
+                pos[i][0] = posVec.x() + origin.x();
+                pos[i][1] = posVec.y() + origin.y();
+                pos[i][2] = posVec.z() + origin.z();
+            }
+
+            return true;
+        };
+    }
+
+    public static QuadModifier.Modifier applyFullbright() { return applyLightmap(15, 15); }
+
+    public static QuadModifier.Modifier applyLightmap(int light) { return applyLightmap(light, light); }
+
+    public static QuadModifier.Modifier applyLightmap(int blockLight, int skyLight)
+    {
+        Preconditions.checkArgument(blockLight >= 0 && blockLight < 16, "Invalid block light value");
+        Preconditions.checkArgument(skyLight >= 0 && skyLight < 16, "Invalid sky light value");
+        return data ->
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                data.light()[i][0] = blockLight;
+                data.light()[i][1] = skyLight;
+            }
+            return true;
+        };
     }
 
 

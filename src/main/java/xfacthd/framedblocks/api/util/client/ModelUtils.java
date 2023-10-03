@@ -1,19 +1,20 @@
 package xfacthd.framedblocks.api.util.client;
 
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.model.BakedQuad;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.WeightedBakedModel;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import com.mojang.math.Vector3f;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.client.ChunkRenderTypeSet;
 import net.minecraftforge.client.model.IQuadTransformer;
 import net.minecraftforge.client.model.data.ModelData;
+import xfacthd.framedblocks.api.FramedBlocksClientAPI;
 import xfacthd.framedblocks.api.util.FramedBlockData;
 import xfacthd.framedblocks.api.util.Utils;
 
@@ -24,6 +25,8 @@ public final class ModelUtils
 {
     public static final ChunkRenderTypeSet SOLID = ChunkRenderTypeSet.of(RenderType.solid());
     public static final ChunkRenderTypeSet CUTOUT = ChunkRenderTypeSet.of(RenderType.cutout());
+    public static final ChunkRenderTypeSet TRANSLUCENT = ChunkRenderTypeSet.of(RenderType.translucent());
+    private static final double UV_SUBSTEP_COUNT = 8D;
 
     @Deprecated(forRemoval = true, since = "1.19")
     public static boolean modifyQuad(BakedQuad quad, VertexDataConsumer consumer)
@@ -97,8 +100,8 @@ public final class ModelUtils
         int offset = vert * IQuadTransformer.STRIDE + IQuadTransformer.UV2;
         int packedLight = vertexData[offset];
 
-        light[0] = packedLight & 0xFFFF;
-        light[1] = (packedLight >> 16) & 0xFFFF;
+        light[0] = LightTexture.block(packedLight);
+        light[1] = LightTexture.sky(packedLight);
     }
 
     public static void packPosition(float[] pos, int[] vertexData, int vert)
@@ -141,9 +144,10 @@ public final class ModelUtils
     public static void packLight(int[] light, int[] vertexData, int vert)
     {
         int offset = vert * IQuadTransformer.STRIDE + IQuadTransformer.UV2;
-        vertexData[offset] = (light[0] & 0xFFFF) | ((light[1] & 0xFFFF) << 16);
+        vertexData[offset] = LightTexture.pack(light[0], light[1]);
     }
 
+    @Deprecated(forRemoval = true)
     public static BakedQuad duplicateQuad(BakedQuad quad)
     {
         int[] vertexData = quad.getVertices();
@@ -205,14 +209,40 @@ public final class ModelUtils
      * @param uv The UV data (modified in place)
      * @param uv1 The first UV texture coordinate
      * @param uv2 The second UV texture coordinate
-     * @param vAxis Wether the modification should happen on the V axis or the U axis
-     * @param invert Wether the coordinates grow in the opposite direction of the texture coordinates
-     * @param rotated Wether the UVs are rotated
-     * @param mirrored Wether the UVs are mirrored
+     * @param uvTo The target UV texture coordinate
+     * @param vAxis Whether the modification should happen on the V axis or the U axis
+     * @param invert Whether the coordinates grow in the opposite direction of the texture coordinates
+     * @param rotated Whether the UVs are rotated
+     * @param mirrored Whether the UVs are mirrored
      */
+    @Deprecated(forRemoval = true, since = "1.19.2")
     public static void remapUV(Direction quadDir, float coord1, float coord2, float coordTo, float[][] uv, int uv1, int uv2, int uvTo, boolean vAxis, boolean invert, boolean rotated, boolean mirrored)
     {
-        remapUV(quadDir, coord1, coord2, coordTo, uv, uv, uv1, uv2, uvTo, vAxis, invert, rotated, mirrored);
+        remapUV(quadDir, null, coord1, coord2, coordTo, uv, uv, uv1, uv2, uvTo, vAxis, invert, rotated, mirrored);
+    }
+
+    /**
+     * Maps a coordinate 'coordTo' between the given coordinates 'coord1' and 'coord2'
+     * onto the UV range they occupy as given by the values at 'uv1' and 'uv2' in the 'uv'
+     * array, calculates the target UV coordinate corresponding to the value of 'coordTo'
+     * and places it at 'uvTo' in the 'uv' array
+     * @param quadDir The direction the quad is facing in
+     * @param sprite The quad's texture
+     * @param coord1 The first coordinate
+     * @param coord2 The second coordinate
+     * @param coordTo The target coordinate, must lie between coord1 and coord2
+     * @param uv The UV data (modified in place)
+     * @param uv1 The first UV texture coordinate
+     * @param uv2 The second UV texture coordinate
+     * @param uvTo The target UV texture coordinate
+     * @param vAxis Whether the modification should happen on the V axis or the U axis
+     * @param invert Whether the coordinates grow in the opposite direction of the texture coordinates
+     * @param rotated Whether the UVs are rotated
+     * @param mirrored Whether the UVs are mirrored
+     */
+    public static void remapUV(Direction quadDir, TextureAtlasSprite sprite, float coord1, float coord2, float coordTo, float[][] uv, int uv1, int uv2, int uvTo, boolean vAxis, boolean invert, boolean rotated, boolean mirrored)
+    {
+        remapUV(quadDir, sprite, coord1, coord2, coordTo, uv, uv, uv1, uv2, uvTo, vAxis, invert, rotated, mirrored);
     }
 
     /**
@@ -228,12 +258,39 @@ public final class ModelUtils
      * @param uvDest The UV data to modify (modified in place)
      * @param uv1 The first UV texture coordinate
      * @param uv2 The second UV texture coordinate
-     * @param vAxis Wether the modification should happen on the V axis or the U axis
-     * @param invert Wether the coordinates grow in the opposite direction of the texture coordinates
-     * @param rotated Wether the UVs are rotated
-     * @param mirrored Wether the UVs are mirrored
+     * @param uvTo The target UV texture coordinate
+     * @param vAxis Whether the modification should happen on the V axis or the U axis
+     * @param invert Whether the coordinates grow in the opposite direction of the texture coordinates
+     * @param rotated Whether the UVs are rotated
+     * @param mirrored Whether the UVs are mirrored
      */
+    @Deprecated(forRemoval = true, since = "1.19.2")
     public static void remapUV(Direction quadDir, float coord1, float coord2, float coordTo, float[][] uvSrc, float[][] uvDest, int uv1, int uv2, int uvTo, boolean vAxis, boolean invert, boolean rotated, boolean mirrored)
+    {
+        remapUV(quadDir, null, coord1, coord2, coordTo, uvSrc, uvDest, uv1, uv2, uvTo, vAxis, invert, rotated, mirrored);
+    }
+
+    /**
+     * Maps a coordinate 'coordTo' between the given coordinates 'coord1' and 'coord2'
+     * onto the UV range they occupy as given by the values at 'uv1' and 'uv2' in the 'uv'
+     * array, calculates the target UV coordinate corresponding to the value of 'coordTo'
+     * and places it at 'uvTo' in the 'uv' array
+     * @param quadDir The direction the quad is facing in
+     * @param sprite The quad's texture
+     * @param coord1 The first coordinate
+     * @param coord2 The second coordinate
+     * @param coordTo The target coordinate, must lie between coord1 and coord2
+     * @param uvSrc The source UV data (not modified)
+     * @param uvDest The UV data to modify (modified in place)
+     * @param uv1 The first UV texture coordinate
+     * @param uv2 The second UV texture coordinate
+     * @param uvTo The target UV texture coordinate
+     * @param vAxis Whether the modification should happen on the V axis or the U axis
+     * @param invert Whether the coordinates grow in the opposite direction of the texture coordinates
+     * @param rotated Whether the UVs are rotated
+     * @param mirrored Whether the UVs are mirrored
+     */
+    public static void remapUV(Direction quadDir, TextureAtlasSprite sprite, float coord1, float coord2, float coordTo, float[][] uvSrc, float[][] uvDest, int uv1, int uv2, int uvTo, boolean vAxis, boolean invert, boolean rotated, boolean mirrored)
     {
         if (rotated)
         {
@@ -245,20 +302,20 @@ public final class ModelUtils
             {
                 invert = !mirrored;
             }
-            else if (Utils.isPositive(quadDir) != vAxis)
+            else if (!vAxis)
             {
-                invert = !invert;
+                invert = invert == mirrored;
             }
         }
         else if (mirrored)
         {
             if (quadDir == Direction.UP)
             {
-                invert = !vAxis || (uvSrc[0][1] > uvSrc[1][1]);
+                invert = !vAxis || (uvSrc[0][1] > uvSrc[1][1]) || (uvSrc[3][1] > uvSrc[2][1]);
             }
             else if (quadDir == Direction.DOWN)
             {
-                invert = !vAxis || (uvSrc[0][1] < uvSrc[1][1]);
+                invert = !vAxis || (uvSrc[0][1] < uvSrc[1][1]) || (uvSrc[3][1] < uvSrc[2][1]);
             }
             else if (!vAxis)
             {
@@ -284,9 +341,24 @@ public final class ModelUtils
         }
         else
         {
-            float mult = (coordTo - coordMin) / (coordMax - coordMin);
-            if (invert) { mult = 1F - mult; }
-            uvDest[uvTo][uvIdx] = Mth.lerp(mult, uvMin, uvMax);
+            if (sprite != null && FramedBlocksClientAPI.getInstance().useDiscreteUVSteps())
+            {
+                double relMin = uvIdx == 0 ? sprite.getUOffset(uvMin) : sprite.getVOffset(uvMin);
+                double relMax = uvIdx == 0 ? sprite.getUOffset(uvMax) : sprite.getVOffset(uvMax);
+
+                double mult = (coordTo - coordMin) / (coordMax - coordMin);
+                if (invert) { mult = 1D - mult; }
+
+                double relTo = Mth.lerp(mult, relMin, relMax);
+                relTo = Math.round(relTo * UV_SUBSTEP_COUNT) / UV_SUBSTEP_COUNT;
+                uvDest[uvTo][uvIdx] = uvIdx == 0 ? sprite.getU(relTo) : sprite.getV(relTo);
+            }
+            else
+            {
+                float mult = (coordTo - coordMin) / (coordMax - coordMin);
+                if (invert) { mult = 1F - mult; }
+                uvDest[uvTo][uvIdx] = Mth.lerp(mult, uvMin, uvMax);
+            }
         }
     }
 
@@ -333,17 +405,19 @@ public final class ModelUtils
 
     public static ModelData getCamoModelData(BakedModel model, BlockState state, ModelData data)
     {
-        BlockAndTintGetter level = data.get(FramedBlockData.LEVEL);
-        BlockPos pos = data.get(FramedBlockData.POS);
-
-        if (level == null || pos == null || pos == BlockPos.ZERO) { return ModelData.EMPTY; }
-
-        return model.getModelData(level, pos, state, data);
+        ModelData camoData = data.get(FramedBlockData.CAMO_DATA);
+        return camoData != null ? camoData : ModelData.EMPTY;
     }
 
     private static final MethodHandle WBM_WRAPPED_MODEL = Utils.unreflectField(WeightedBakedModel.class, "f_119542_");
 
+    @Deprecated(forRemoval = true, since = "1.19.2")
     public static List<BakedQuad> getAllCullableQuads(BakedModel model, BlockState state, RandomSource rand, RenderType renderType)
+    {
+        return getAllCullableQuads(model, state, rand, ModelData.EMPTY, renderType);
+    }
+
+    public static List<BakedQuad> getAllCullableQuads(BakedModel model, BlockState state, RandomSource rand, ModelData data, RenderType renderType)
     {
         if (model instanceof WeightedBakedModel weighted)
         {
@@ -362,7 +436,7 @@ public final class ModelUtils
         List<BakedQuad> quads = new ArrayList<>();
         for (Direction dir : Direction.values())
         {
-            quads.addAll(model.getQuads(state, dir, rand, ModelData.EMPTY, renderType));
+            quads.addAll(model.getQuads(state, dir, rand, data, renderType));
         }
         return quads;
     }

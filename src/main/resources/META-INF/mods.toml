@@ -8,8 +8,9 @@ modId="framedblocks"
 version="${file.jarVersion}"
 displayName="FramedBlocks"
 #updateJSONURL="http://myurl.me/"
-#displayURL="http://example.com/"
+displayURL="https://www.curseforge.com/minecraft/mc-mods/framedblocks"
 logoFile="logo.png"
+logoBlur=false
 #credits="Thanks for this example mod goes to Java"
 authors="XFactHD"
 description='''
@@ -18,7 +19,7 @@ description='''
 [[dependencies.framedblocks]]
     modId="forge"
     mandatory=true
-    versionRange="[42.0.2,)"
+    versionRange="[43.2.14,)"
     ordering="NONE"
     side="BOTH"
 
@@ -36,12 +37,12 @@ description='''
     ordering="AFTER"
     side="BOTH"
 
-#[[dependencies.framedblocks]]
-#    modId="ctm"
-#    mandatory=false
-#    versionRange="[1.18-1.1.3+1,)"
-#    ordering="AFTER"
-#    side="CLIENT"
+[[dependencies.framedblocks]]
+    modId="ctm"
+    mandatory=false
+    versionRange="[1.18-1.1.3+1,)"
+    ordering="AFTER"
+    side="CLIENT"
 
 [[dependencies.framedblocks]]
     modId="diagonalfences"
@@ -56,3 +57,10 @@ description='''
     versionRange="[1.19.1-0.5.0,)"
     ordering="NONE"
     side="CLIENT"
+
+[[dependencies.framedblocks]]
+    modId="jei"
+    mandatory=false
+    versionRange="[11.6.0.1010,)"
+    ordering="NONE"
+    side="BOTH"

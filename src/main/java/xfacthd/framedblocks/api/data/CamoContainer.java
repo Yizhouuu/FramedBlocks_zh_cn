@@ -30,7 +30,7 @@ public abstract class CamoContainer
 
     /**
      * Returns the fluid contained in this camo container, if applicable
-     * @apiNote Must be overriden by CamoContainers returning {@link ContainerType#FLUID} from {@link CamoContainer#getType()}
+     * @apiNote Must be overridden by CamoContainers returning {@link ContainerType#FLUID} from {@link CamoContainer#getType()}
      */
     public Fluid getFluid()
     {
@@ -78,6 +78,14 @@ public abstract class CamoContainer
     public abstract ItemStack toItemStack(ItemStack stack);
 
     /**
+     * {@return true if this camo can be rotated}
+     */
+    public boolean canRotateCamo()
+    {
+        return Utils.getRotatableProperty(getState()) != null;
+    }
+
+    /**
      * Rotate the camo by cycling through the first property considered rotatable by {@link Utils#getRotatableProperty(BlockState)}.
      * @return True if the rotation was successful, requiring a render update
      */
@@ -97,6 +105,11 @@ public abstract class CamoContainer
      * Returns the {@link SoundType} to use for the camo this container holds
      */
     public SoundType getSoundType() { return state.getSoundType(); }
+
+    /**
+     * @return True if the camo is fully solid
+     */
+    public boolean isSolid(BlockGetter level, BlockPos pos) { return getState().isSolidRender(level, pos); }
 
     /**
      * Returns true if this container is empty

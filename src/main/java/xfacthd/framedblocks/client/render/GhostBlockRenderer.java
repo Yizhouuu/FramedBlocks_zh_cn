@@ -1,6 +1,7 @@
 package xfacthd.framedblocks.client.render;
 
 import com.google.common.base.Preconditions;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
@@ -14,14 +15,9 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.*;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.ForgeRenderTypes;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.model.data.ModelData;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import xfacthd.framedblocks.api.ghost.CamoPair;
 import xfacthd.framedblocks.api.ghost.GhostRenderBehaviour;
 import xfacthd.framedblocks.api.util.*;
@@ -33,7 +29,6 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 @SuppressWarnings("ConstantConditions")
-@Mod.EventBusSubscriber(modid = FramedConstants.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class GhostBlockRenderer
 {
     private static final RandomSource RANDOM = RandomSource.create();
@@ -41,11 +36,11 @@ public final class GhostBlockRenderer
     private static final FramedBlockData GHOST_MODEL_DATA = new FramedBlockData();
     private static final FramedBlockData GHOST_MODEL_DATA_TWO = new FramedBlockData();
     private static final Map<Item, GhostRenderBehaviour> RENDER_BEHAVIOURS = new IdentityHashMap<>();
+    private static boolean locked = false;
     private static final GhostRenderBehaviour DEFAULT_BEHAVIOUR = new GhostRenderBehaviour() {};
     private static final String PROFILER_KEY = FramedConstants.MOD_ID + "_ghost_block";
 
-    @SubscribeEvent
-    public static void onClientSetup(final FMLClientSetupEvent event)
+    public static void init()
     {
         MODEL_DATA = ModelData.builder()
                 .with(FramedBlockData.PROPERTY, GHOST_MODEL_DATA)
@@ -61,11 +56,10 @@ public final class GhostBlockRenderer
 
         GHOST_MODEL_DATA.setCamoState(Blocks.AIR.defaultBlockState());
         GHOST_MODEL_DATA_TWO.setCamoState(Blocks.AIR.defaultBlockState());
-
-        MinecraftForge.EVENT_BUS.addListener(GhostBlockRenderer::onRenderLevelStage);
+        GHOST_MODEL_DATA_TWO.setUseAltModel(true);
     }
 
-    private static void onRenderLevelStage(final RenderLevelStageEvent event)
+    public static void onRenderLevelStage(final RenderLevelStageEvent event)
     {
         if (!ClientConfig.showGhostBlocks || event.getStage() != RenderLevelStageEvent.Stage.AFTER_PARTICLES)
         {
@@ -143,7 +137,7 @@ public final class GhostBlockRenderer
         ModelData modelData = behaviour.appendModelData(stack, proxiedStack, context, renderState, secondPass, MODEL_DATA);
         mc().getProfiler().pop(); //append_modeldata
 
-        MultiBufferSource buffers = mc().renderBuffers().bufferSource();
+        MultiBufferSource.BufferSource buffers = mc().renderBuffers().bufferSource();
 
         doRenderGhostBlock(poseStack, buffers, renderPos, renderState, modelData);
 
@@ -156,31 +150,38 @@ public final class GhostBlockRenderer
         }
     }
 
-    private static void doRenderGhostBlock(PoseStack mstack, MultiBufferSource buffers, BlockPos renderPos, BlockState renderState, ModelData modelData)
+    private static void doRenderGhostBlock(PoseStack mstack, MultiBufferSource.BufferSource buffers, BlockPos renderPos, BlockState renderState, ModelData modelData)
     {
+        RenderType bufferType = ClientConfig.altGhostRenderer ?
+                Sheets.translucentCullBlockSheet() :
+                ForgeRenderTypes.TRANSLUCENT_ON_PARTICLES_TARGET.get();
+
         mc().getProfiler().push("buffer");
         Vec3 offset = Vec3.atLowerCornerOf(renderPos).subtract(mc().gameRenderer.getMainCamera().getPosition());
-        VertexConsumer builder = new GhostVertexConsumer(buffers.getBuffer(ForgeRenderTypes.TRANSLUCENT_ON_PARTICLES_TARGET.get()), 0xAA);
+        VertexConsumer builder = new GhostVertexConsumer(buffers.getBuffer(bufferType), 0xAA);
         mc().getProfiler().pop(); //buffer
 
         mc().getProfiler().push("draw");
         BakedModel model = ModelCache.getModel(renderState);
+        mstack.pushPose();
+        mstack.translate(offset.x, offset.y, offset.z);
         for (RenderType type : model.getRenderTypes(renderState, RANDOM, modelData))
         {
-            doRenderGhostBlockInLayer(mstack, builder, renderPos, renderState, type, offset, modelData);
+            doRenderGhostBlockInLayer(mstack, builder, renderPos, renderState, type, modelData);
         }
+        mstack.popPose();
         mc().getProfiler().pop(); //draw
 
         mc().getProfiler().push("upload");
-        ((MultiBufferSource.BufferSource) buffers).endBatch(ForgeRenderTypes.TRANSLUCENT_ON_PARTICLES_TARGET.get());
+        RenderSystem.enableCull();
+        buffers.endBatch(bufferType);
         mc().getProfiler().pop(); //upload
     }
 
-    private static void doRenderGhostBlockInLayer(PoseStack mstack, VertexConsumer builder, BlockPos renderPos, BlockState renderState, RenderType layer, Vec3 offset, ModelData modelData)
+    private static void doRenderGhostBlockInLayer(
+            PoseStack mstack, VertexConsumer builder, BlockPos renderPos, BlockState renderState, RenderType layer, ModelData modelData
+    )
     {
-        mstack.pushPose();
-        mstack.translate(offset.x, offset.y, offset.z);
-
         mc().getBlockRenderer().renderBatched(
                 renderState,
                 renderPos,
@@ -192,14 +193,14 @@ public final class GhostBlockRenderer
                 modelData,
                 layer
         );
-
-        mstack.popPose();
     }
 
 
 
     public static synchronized void registerBehaviour(GhostRenderBehaviour behaviour, Block... blocks)
     {
+        Preconditions.checkState(!locked, "GhostRenderBehaviour registry is locked!");
+
         Preconditions.checkNotNull(behaviour, "GhostRenderBehaviour must be non-null");
         Preconditions.checkNotNull(blocks, "Blocks array must be non-null to register a GhostRenderBehaviour");
         Preconditions.checkState(blocks.length > 0, "At least one block must be provided to register a GhostRenderBehaviour");
@@ -214,6 +215,8 @@ public final class GhostBlockRenderer
 
     public static synchronized void registerBehaviour(GhostRenderBehaviour behaviour, Item... items)
     {
+        Preconditions.checkState(!locked, "GhostRenderBehaviour registry is locked!");
+
         Preconditions.checkNotNull(behaviour, "GhostRenderBehaviour must be non-null");
         Preconditions.checkNotNull(items, "Items array must be non-null to register a GhostRenderBehaviour");
         Preconditions.checkState(items.length > 0, "At least one item must be provided to register a GhostRenderBehaviour");
@@ -227,6 +230,11 @@ public final class GhostBlockRenderer
     public static GhostRenderBehaviour getBehaviour(Item item)
     {
         return RENDER_BEHAVIOURS.getOrDefault(item, DEFAULT_BEHAVIOUR);
+    }
+
+    public static void lockRegistration()
+    {
+        locked = true;
     }
 
     private static Minecraft mc() { return Minecraft.getInstance(); }

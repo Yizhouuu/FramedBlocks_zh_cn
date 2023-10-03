@@ -11,7 +11,7 @@ import xfacthd.framedblocks.api.util.Utils;
 
 import java.lang.invoke.MethodHandle;
 
-public class StandingAndWallBlockGhostRenderBehaviour implements GhostRenderBehaviour
+public final class StandingAndWallBlockGhostRenderBehaviour implements GhostRenderBehaviour
 {
     private static final MethodHandle BLOCKITEM_GETPLACESTATE = Utils.unreflectMethod(BlockItem.class, "m_5965_", BlockPlaceContext.class);
 
@@ -25,7 +25,9 @@ public class StandingAndWallBlockGhostRenderBehaviour implements GhostRenderBeha
         }
         catch (Throwable e)
         {
-            throw new RuntimeException("Failed to invoke BlockItem#getPlacementState '%s'", e);
+            throw new RuntimeException(
+                    "Failed to invoke BlockItem#getPlacementState on '%s'".formatted(stack.getItem()), e
+            );
         }
     }
 }

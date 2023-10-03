@@ -11,6 +11,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import xfacthd.framedblocks.api.block.IFramedBlock;
 import xfacthd.framedblocks.api.type.IBlockType;
 import xfacthd.framedblocks.api.util.FramedConstants;
+import xfacthd.framedblocks.api.util.Utils;
 import xfacthd.framedblocks.api.util.test.TestUtils;
 import xfacthd.framedblocks.common.data.BlockType;
 import xfacthd.framedblocks.common.util.ServerConfig;
@@ -18,7 +19,7 @@ import xfacthd.framedblocks.common.util.ServerConfig;
 import java.util.*;
 
 @GameTestHolder(FramedConstants.MOD_ID)
-public class IntangibilityTests
+public final class IntangibilityTests
 {
     private static final String BATCH_NAME = "intangibility";
     private static final String STRUCTURE_NAME = FramedConstants.MOD_ID + ":empty";
@@ -30,7 +31,7 @@ public class IntangibilityTests
     {
         return Arrays.stream(BlockType.values())
                 .filter(BlockType::allowMakingIntangible)
-                .map(type -> new ResourceLocation(FramedConstants.MOD_ID, type.getName()))
+                .map(type -> Utils.rl(type.getName()))
                 .map(ForgeRegistries.BLOCKS::getValue)
                 .filter(Objects::nonNull)
                 .map(IntangibilityTests::getTestState)
